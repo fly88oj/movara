@@ -1,0 +1,6 @@
+[toolchain]
+# Pin the toolchain so CI, pre-commit hooks and every contributor use the
+# same compiler and clippy lint set. Bump deliberately after checking
+# `cargo clippy --all-targets -- -D warnings` with the new version.
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]

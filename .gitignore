@@ -1,0 +1,15 @@
+# rust
+/target/
+**/*.rs.bk
+
+# tool artifacts
+tests/e2e_results.json
+.movara/
+.mimosa/
+*.movara-tmp
+*.movara-premigration.bak
+
+# editors / os
+.idea/
+.vscode/
+.DS_Store

@@ -1,0 +1,64 @@
+[package]
+name = "movara"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Move a project directory and rewrite every AI coding agent's local session/config references to it, with backup and undo"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/fly88oj/movara"
+keywords = ["ai", "agent", "cli", "migration", "sessions"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+
+[lib]
+name = "movara"
+path = "src/lib.rs"
+
+[[bin]]
+name = "movara"
+path = "src/bin/movara.rs"
+
+[dependencies]
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+clap = { version = "4", features = ["derive"] }
+dirs = "5"
+memchr = "2"
+rusqlite = { version = "0.32", features = ["bundled"] }
+rust-i18n = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+md-5 = "0.10"
+sys-locale = "0.3"
+walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+strip = "symbols"
+opt-level = 3
+
+# ---- native packages (cargo-deb / cargo-generate-rpm) ----
+
+[package.metadata.deb]
+maintainer = "movara contributors"
+depends = "$auto"
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/movara", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/movara/", "644"],
+    ["LICENSE-APACHE", "usr/share/doc/movara/", "644"],
+    ["LICENSE-MIT", "usr/share/doc/movara/", "644"],
+]
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/movara", dest = "/usr/bin/movara", mode = "755" },
+    { source = "README.md", dest = "/usr/share/doc/movara/README.md", mode = "644" },
+    { source = "LICENSE-APACHE", dest = "/usr/share/doc/movara/LICENSE-APACHE", mode = "644" },
+    { source = "LICENSE-MIT", dest = "/usr/share/doc/movara/LICENSE-MIT", mode = "644" },
+]
