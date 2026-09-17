@@ -101,10 +101,17 @@ impl Fixture {
         self.w(
             ".claude.json",
             &format!(
-                "{{\"numStartups\":5,\"projects\":{{\"{}\":\
+                "{{\"numStartups\":5,\"mcpServers\":{{\"db\":{{\"env\":\
+                 {{\"API_KEY\":\"sekret-mcp\"}}}}}},\"projects\":{{\"{}\":\
                  {{\"allowedTools\":[]}},\"/other\":{{}}}}}}",
                 self.old
             ),
+        );
+        // secret carriers that must never leave the machine in an export
+        self.w(".claude/.credentials.json", "{\"token\":\"sekret-creds\"}");
+        self.w(
+            ".claude/shell-snapshots/snap-1.sh",
+            "export SECRET=sekret-snap\n",
         );
     }
 

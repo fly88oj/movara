@@ -8,6 +8,17 @@ List items must each be a single source line (no hard wrapping): the
 release workflow extracts this file verbatim as the GitHub Release body,
 and the release page renders every newline as a forced break.
 
+## [Unreleased]
+
+### Added
+
+- **`movara export` / `movara import`** — portable agent-state archives for multi-host migration: a single standard `.tar.gz` built with the pure-Rust `tar` + `flate2` crates (no system toolchain, self-contained binary). Exports scope to the whole host, `--path` project paths (repeatable, boundary-aware selection so sibling paths like `/p/abc2` never leak into a `/p/abc` export) and/or `--agents`. Import rebases paths through repeatable `--rebase OLD:NEW` rules by reusing the migration engine, verifies archive paths against the target host (`--allow-missing-path` to proceed), applies skip/replace conflict policies per file, refuses to place anything outside the selected agents' state roots (crafted archives stay contained), never replaces a shared database on a filtered exchange, and is fully reversible — the backup journal now records created paths, so `movara undo` removes imported state again.
+- **Export exclusion layer**: auth/credential/token files, shell snapshots and secret-carrying configs never leave the machine; dual-purpose configs (`~/.claude.json`, `~/.codex/config.toml`, `~/.continue/config.json`) are exported as sanitized path-keyed projections and merged additively on import.
+
+### Fixed
+
+- Boundary-aware replacement now guards both edges of a match: a token can no longer match as a mid-fragment of a longer name, so a short rebase rule or a shared path suffix cannot corrupt longer unrelated paths.
+
 ## [1.0.0] - 2026-09-17
 
 ### Added

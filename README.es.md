@@ -117,6 +117,8 @@ origen == destino.
 | `movara undo --id <ID>` | revierte por completo una migración (ver abajo) |
 | `movara backups` | lista los diarios de migración (ver abajo) |
 | `movara agents` | lista los agentes admitidos y su estado de instalación |
+| `movara export [--path RUTA]... [--agents LISTA]` | escribe un archivo `.tar.gz` portátil del estado — todo el host, o filtrado por ruta de proyecto / agentes |
+| `movara import <ARCHIVO> [--rebase OLD:NEW]...` | restaura un archivo en este host remapeando rutas; se registra como una migración, así que `movara undo` lo revierte |
 
 ### Opciones
 
@@ -131,6 +133,11 @@ origen == destino.
 | `--yes` | migrate, mv | omitir el aviso de confirmación |
 | `--move-project` | migrate | mover primero el directorio del proyecto |
 | `--json` | agents, scan, migrate, mv, backups | emitir un único documento JSON en stdout |
+| `--out FILE` | export | ruta del archivo (por defecto `movara-export-<marca-de-tiempo>.tar.gz`) |
+| `--path RUTA` | export | solo el estado que referencia esta ruta de proyecto (repetible; interseca con `--agents`) |
+| `--rebase OLD:NEW` | import | mapeo de rutas, repetible; las reglas solapadas o encadenadas se rechazan |
+| `--on-conflict POLICY` | import | `skip` (por defecto) o `replace` el estado local existente |
+| `--allow-missing-path` | import | continuar cuando las rutas del archivo no existan localmente |
 
 ### Deshacer y copias de seguridad
 
@@ -152,6 +159,8 @@ incluye el directorio movido.
   solo agente o archivo, y debe ejecutarse antes de una nueva migración de
   las mismas rutas.
 
+Los intercambios con `export` / `import` se registran igual: `undo` revierte una importación por completo, incluido el estado que creó.
+
 ## Seguridad
 
 - **Sustitución consciente de límites**: `/a/abc` nunca coincide con
@@ -164,6 +173,7 @@ incluye el directorio movido.
 - Los renombrados se omiten si el destino existe; se rechaza `--from /`.
 - Cierre los agentes que vaya a migrar (las bases WAL reciben un aviso
   pero no se corrompen).
+
 
 ## Agentes admitidos
 

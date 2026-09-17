@@ -113,6 +113,8 @@ and src == dst are refused.
 | `movara undo --id <ID>` | fully reverse one migration (see below) |
 | `movara backups` | list migration journals (see below) |
 | `movara agents` | list supported agents and whether each is installed |
+| `movara export [--path PATH]... [--agents LIST]` | write a portable `.tar.gz` archive of agent state — whole host, or filtered by project path / agents |
+| `movara import <ARCHIVE> [--rebase OLD:NEW]...` | restore an archive on this host, rebasing paths; journaled like a migration, so `movara undo` reverses it |
 
 ### Options
 
@@ -127,6 +129,11 @@ and src == dst are refused.
 | `--yes` | migrate, mv | skip the confirmation prompt |
 | `--move-project` | migrate | move the project directory itself before rekeying |
 | `--json` | agents, scan, migrate, mv, backups | emit a single JSON document on stdout (machine-readable) |
+| `--out FILE` | export | archive path (default `movara-export-<timestamp>.tar.gz`) |
+| `--path PATH` | export | only state referencing this project path (repeatable; intersects `--agents`) |
+| `--rebase OLD:NEW` | import | path mapping, repeatable; overlapping and chained rules are refused |
+| `--on-conflict POLICY` | import | `skip` (default) or `replace` existing local state |
+| `--allow-missing-path` | import | proceed when archive paths resolve to nothing locally |
 
 ### Undo & backups
 
@@ -147,6 +154,8 @@ including the moved project directory.
   that entire migration, not a single agent or file, and it should run
   before a new migration of the same paths.
 
+Exchanges via `export` / `import` are journaled the same way: `undo` reverses an import completely, including state it created.
+
 ## Safety
 
 - **Boundary-aware replacement**: `/a/abc` never matches `/a/abc2` or
@@ -162,6 +171,7 @@ including the moved project directory.
 - Renames are skipped when the target exists; `--from /` is refused.
 - Close the agents you are migrating (WAL databases get a warning but are
   not corrupted).
+
 
 ## Supported agents
 

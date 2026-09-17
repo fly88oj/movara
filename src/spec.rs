@@ -20,7 +20,7 @@ pub struct ReplaceSpec {
 /// the next byte is NOT one of these (so /a/abc never matches inside
 /// /a/abc2 or /a/abc-def, while /a/abc/sub, "…/abc\"" and file:///a/abc do)
 #[inline]
-fn is_name_byte(b: u8) -> bool {
+pub(crate) fn is_name_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_' || b == b'.' || b == b'-'
 }
 
@@ -49,6 +49,21 @@ impl ReplaceSpec {
             pairs,
             needles,
         })
+    }
+
+    /// an empty spec that replaces nothing (import without `--rebase`)
+    pub fn identity() -> Self {
+        ReplaceSpec {
+            old: String::new(),
+            new: String::new(),
+            pairs: Vec::new(),
+            needles: Vec::new(),
+        }
+    }
+
+    /// the raw old->new rules this spec was built from (journal metadata)
+    pub fn rule(&self) -> (String, String) {
+        (self.old.clone(), self.new.clone())
     }
 
     /// Boundary-aware replace inside a string.
@@ -80,8 +95,14 @@ impl ReplaceSpec {
                 let mut matched = None;
                 for (idx, needle) in self.needles.iter().enumerate() {
                     let end = i + needle.len();
+                    // component boundaries on BOTH sides: a token is a
+                    // whole path/bucket/hash, never a mid-fragment of a
+                    // longer name (so /a/abc never matches /tmp/a/abc,
+                    // and a short rebase rule cannot fire inside a longer
+                    // unrelated path)
                     if end <= bytes.len()
                         && &bytes[i..end] == needle.as_slice()
+                        && (i == 0 || !is_name_byte(bytes[i - 1]))
                         && !bytes.get(end).is_some_and(|nb| is_name_byte(*nb))
                     {
                         matched = Some(idx);
@@ -108,9 +129,55 @@ impl ReplaceSpec {
         self.needles.iter().any(|n| memmem::find(data, n).is_some())
     }
 
+    /// like_pattern() for SQLite pre-filters (single pair)
     pub fn like_pattern(&self) -> String {
         format!("%{}%", self.old)
     }
+}
+
+/// Parse and validate `--rebase OLD:NEW` rules (the last `:` separates the
+/// pair, so Windows drive letters survive). Refused: `/` sources, identity
+/// pairs, duplicate sources, and chained rules whose source lies under
+/// another rule's target. Returned sorted longest-source-first so that
+/// sequential single-pair passes (import) resolve prefix overlaps correctly.
+pub fn prepare_rules(raw: &[String]) -> Result<Vec<(String, String)>> {
+    let mut rules: Vec<(String, String)> = Vec::new();
+    for r in raw {
+        let (o, n) = match r.rsplit_once(':') {
+            Some(x) => x,
+            None => anyhow::bail!("{}", t!("spec.err_rule", rule = r.as_str())),
+        };
+        let op = absolutish(Path::new(o));
+        let np = absolutish(Path::new(n));
+        if op == Path::new("/") {
+            anyhow::bail!("{}", t!("spec.err_root"));
+        }
+        let (os, ns) = (crate::ctx::path_str(&op), crate::ctx::path_str(&np));
+        if os == ns {
+            anyhow::bail!("{}", t!("spec.err_rule_identity", rule = r.as_str()));
+        }
+        if rules.iter().any(|(ro, _)| *ro == os) {
+            anyhow::bail!("{}", t!("spec.err_rule_dup", rule = os.as_str()));
+        }
+        rules.push((os, ns));
+    }
+    // no rule's source may lie under another rule's target AND no rule's
+    // target may land under another rule's source — both directions make
+    // the sequential (longest-first) application order-dependent
+    for (o, n) in &rules {
+        for (o2, n2) in &rules {
+            let chained = (o == n2 || o.starts_with(&format!("{}/", n2)))
+                || (n == o2 || n.starts_with(&format!("{}/", o2)));
+            if chained {
+                anyhow::bail!(
+                    "{}",
+                    t!("spec.err_rule_chain", old = o.as_str(), new = n.as_str())
+                );
+            }
+        }
+    }
+    rules.sort_by_key(|(o, _)| std::cmp::Reverse(o.len()));
+    Ok(rules)
 }
 
 #[inline]
@@ -175,6 +242,13 @@ mod tests {
         // token at end of string matches (no boundary byte follows)
         let s = spec.replace("/p/x//p/abc");
         assert_eq!(s, "/p/x//p/cba");
+        // left boundary: a token never matches when a name byte runs
+        // directly into it — "/tmp/p/abc" and "xp/abc" are different,
+        // longer paths whose shared suffix must stay untouched
+        let s = spec.replace("/tmp/p/abc");
+        assert_eq!(s, "/tmp/p/abc", "token must not match mid-name");
+        let s = spec.replace("xp/abc");
+        assert_eq!(s, "xp/abc", "name byte before token blocks the match");
         // empty / no-match strings unchanged
         assert_eq!(spec.replace(""), "");
         assert_eq!(spec.replace("no tokens here"), "no tokens here");
@@ -184,15 +258,17 @@ mod tests {
     fn replace_is_linear_on_large_input() {
         // a pathological input that would blow a backtracking regex
         let spec = ReplaceSpec::new("/p/abc", "/p/cba").unwrap();
+        // the repeated string is ONE long path: only the leading token
+        // has a left boundary, every inner "/p/abc" is preceded by the
+        // previous component's 'c' and must stay (inner components are
+        // different directories that did not move)
         let line = "/p/abc".repeat(50_000);
         let out = spec.replace(&line);
-        assert_eq!(out, "/p/cba".repeat(50_000));
-        // a trailing name byte shields the LAST occurrence only: the ones
-        // followed by "/" are legitimate sub-path boundaries and DO change
+        assert_eq!(out, format!("{}{}", "/p/cba", "/p/abc".repeat(49_999)));
         let near = format!("{}2", "/p/abc".repeat(50_000));
         assert_eq!(
             spec.replace(&near),
-            format!("{}{}2", "/p/cba".repeat(49_999), "/p/abc")
+            format!("{}{}2", "/p/cba", "/p/abc".repeat(49_999))
         );
         // the shielded token alone stays untouched
         assert_eq!(spec.replace("/p/abc2"), "/p/abc2");
