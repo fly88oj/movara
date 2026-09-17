@@ -15,13 +15,45 @@ A maioria dos agentes de programação com IA (Claude Code, Codex, a família Ge
 
 ## Instalação
 
-Implementado em Rust, sem dependências de runtime, roda em Linux / macOS / Windows:
+Implementado em Rust, sem dependências de runtime, roda em Linux / macOS / Windows. Cada [release](https://github.com/fly88oj/movara/releases) traz pacotes pré-compilados; os nomes de arquivo abaixo usam `1.0.0` — substitua pela versão que você baixou.
+
+**Debian / Ubuntu (.deb)**
 
 ```bash
-# binários pré-compilados (tar.gz / zip) e pacotes nativos (.deb / .rpm / .dmg)
-# são anexados a cada release com tag pelo GitHub Actions
-#   https://github.com/fly88oj/movara/releases
+sudo dpkg -i movara_1.0.0-1_amd64.deb
+```
 
+**Fedora / RHEL (.rpm)**
+
+```bash
+sudo dnf install movara-1.0.0-1.x86_64.rpm
+```
+
+**Outras distribuições Linux (tar.gz)**
+
+```bash
+tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+**macOS Apple Silicon (.dmg ou tar.gz)**
+
+```bash
+# abra o dmg e copie bin/movara para /usr/local/bin, ou:
+tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+Macs Intel executam a build arm64 via Rosetta 2 ou compilam do código-fonte.
+
+**Windows (zip)**
+
+Extraia `movara-1.0.0-x86_64-pc-windows-msvc.zip` e coloque `movara.exe`
+no seu `PATH`.
+
+**Do código-fonte**
+
+```bash
 cargo install --path .        # fornece o comando `movara`
 ```
 
@@ -51,17 +83,53 @@ movara backups
 movara undo --id 20260903-131427-644777
 ```
 
-Comportamento do `movara`: escanear e mostrar qual estado de agente referencia o caminho antigo → confirmar → `mv` do diretório (entre sistemas de arquivos diferentes, recorre a copiar + remover) → migrar cada agente → imprimir um relatório com o id de desfazer. Se algo der errado, um único `movara undo` restaura tanto a localização do diretório quanto todo o estado dos agentes. Somente diretórios são aceitos (arquivos não carregam histórico de agente — use o `mv` comum); alvos já existentes, diretórios-pai do alvo ausentes e origem == destino são recusados.
+Comportamento do `movara mv`: escanear e mostrar qual estado de agente referencia o caminho antigo → confirmar → `mv` do diretório (entre sistemas de arquivos diferentes, recorre a copiar + remover) → migrar cada agente → imprimir um relatório com o id de desfazer. Se algo der errado, um único `movara undo` restaura tanto a localização do diretório quanto todo o estado dos agentes. Somente diretórios são aceitos (arquivos não carregam histórico de agente — use o `mv` comum); alvos já existentes, diretórios-pai do alvo ausentes e origem == destino são recusados.
 
-| opção | significado |
+### Comandos
+
+| comando | propósito |
 |---|---|
-| `--agents claude,codex` | limitar a agentes específicos (padrão: todos os instalados) |
-| `--extra-root PATH` | também reescrever uma árvore arbitrária (dotfiles, configs de IDE); repetível |
-| `--deep` | também reescrever menções de caminho dentro de conteúdo de chat / logs (padrão: somente campos de identidade — cwd, directory, project, …) |
-| `--backup-dir DIR` | diretório de backup (padrão `~/.movara/backups`) |
-| `--dry-run` | somente relatório |
-| `--yes` | pular o aviso de confirmação (mv, migrate) |
-| `--json` | emitir um único documento JSON no stdout (legível por máquina) |
+| `movara mv <SRC> <DST>` | move o diretório (DST existente = move para dentro) e migra todos os agentes em uma etapa — o substituto cotidiano do mv |
+| `movara scan --from <OLD> [--to <NEW>]` | relatório somente-leitura de qual estado de agente referencia um caminho; `--to` serve apenas para pré-visualizar o novo nome |
+| `movara migrate --from <OLD> --to <NEW>` | rechaveia o estado depois que o diretório foi movido por outros meios; `--move-project` move o diretório primeiro |
+| `movara undo --id <ID>` | reverte uma migração por completo (veja abaixo) |
+| `movara backups` | lista os diários de migração (veja abaixo) |
+| `movara agents` | lista os agentes suportados e o status de instalação |
+
+### Opções
+
+| opção | aplica-se a | significado |
+|---|---|---|
+| `--lang CODE` | global | sobrescreve o idioma da interface (en, zh-CN, ja, ko, es, fr, de, pt-BR) |
+| `--agents LISTA` | scan, migrate, mv | lista separada por vírgulas; limitar a agentes específicos (padrão: todos os instalados) |
+| `--extra-root PATH` | scan, migrate, mv | também reescrever uma árvore arbitrária (dotfiles, configs de IDE); repetível |
+| `--deep` | migrate, mv | também reescrever menções de caminho dentro de conteúdo de chat / logs (padrão: somente campos de identidade — cwd, directory, project, …) |
+| `--backup-dir DIR` | migrate, mv, undo, backups | raiz dos diários de backup (padrão `~/.movara/backups`) |
+| `--dry-run` | migrate, mv | somente relatório, nada é alterado |
+| `--yes` | migrate, mv | pular o aviso de confirmação |
+| `--move-project` | migrate | mover primeiro o próprio diretório do projeto |
+| `--json` | agents, scan, migrate, mv, backups | emitir um único documento JSON no stdout (legível por máquina) |
+
+### Desfazer e backups
+
+Cada `mv` / `migrate` grava um diário em `~/.movara/backups/<id>/` antes de
+mudar qualquer coisa: cópias de cada arquivo que será alterado, bancos
+SQLite completos (após um `wal_checkpoint`) e um livro-razão de renomeações
+que inclui o diretório movido.
+
+- **`movara backups`** lista os diários — id, data, caminho antigo → novo,
+  agentes afetados, contagens de arquivos/bancos/renomeações (`--json` para
+  scripts). O diário é a unidade de desfazer: filtrar por caminho ou agente
+  não é suportado hoje; apague manualmente diários antigos para liberar
+  disco.
+- **`movara undo --id <ID>`** reproduz um diário de trás para frente — os
+  conteúdos dos arquivos voltam, os bancos são trocados de volta, as
+  renomeações se invertem e o diretório movido retorna ao lugar. Use quando
+  uma migração apontou para o caminho errado, um agente ainda estava
+  rodando durante a mudança ou você simplesmente quer o layout antigo de
+  volta. Desfazer é tudo-ou-nada por migração: um id reverte aquela
+  migração inteira, não um único agente ou arquivo, e deve rodar antes de
+  uma nova migração dos mesmos caminhos.
 
 ## Segurança
 

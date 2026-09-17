@@ -15,13 +15,46 @@ Die meisten KI-Coding-Agenten (Claude Code, Codex, die Gemini-CLI-Familie, OpenC
 
 ## Installation
 
-In Rust implementiert, keine Laufzeitabhängigkeiten, läuft auf Linux / macOS / Windows:
+In Rust implementiert, keine Laufzeitabhängigkeiten, läuft auf Linux / macOS / Windows. Jedes [Release](https://github.com/fly88oj/movara/releases) enthält vorgebaute Pakete; die Dateinamen unten verwenden `1.0.0` — ersetzen Sie sie durch die heruntergeladene Version.
+
+**Debian / Ubuntu (.deb)**
 
 ```bash
-# vorkompilierte Binaries (tar.gz / zip) und native Pakete (.deb / .rpm / .dmg)
-# werden von GitHub Actions an jedes getaggte Release angehängt
-#   https://github.com/fly88oj/movara/releases
+sudo dpkg -i movara_1.0.0-1_amd64.deb
+```
 
+**Fedora / RHEL (.rpm)**
+
+```bash
+sudo dnf install movara-1.0.0-1.x86_64.rpm
+```
+
+**Andere Linux-Distributionen (tar.gz)**
+
+```bash
+tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+**macOS Apple Silicon (.dmg oder tar.gz)**
+
+```bash
+# dmg öffnen und bin/movara nach /usr/local/bin kopieren, oder:
+tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+Intel-Macs führen die arm64-Build unter Rosetta 2 aus oder bauen aus dem
+Quellcode.
+
+**Windows (zip)**
+
+`movara-1.0.0-x86_64-pc-windows-msvc.zip` entpacken und `movara.exe` in
+den `PATH` legen.
+
+**Aus dem Quellcode**
+
+```bash
 cargo install --path .        # stellt den Befehl `movara` bereit
 ```
 
@@ -51,17 +84,54 @@ movara backups
 movara undo --id 20260903-131427-644777
 ```
 
-Verhalten von `movara`: scannen und anzeigen, welcher Agentenzustand den alten Pfad referenziert → bestätigen → Verzeichnis verschieben (dateisystemübergreifend automatisch per Kopieren+Löschen) → jeden Agenten migrieren → Bericht mit Undo-Kennung ausgeben. Geht etwas schief, stellt ein einziges `movara undo` sowohl die Verzeichnisposition als auch den gesamten Agentenzustand wieder her. Nur Verzeichnisse werden akzeptiert (Dateien tragen keinen Agentenverlauf — normales `mv` verwenden); vorhandene Ziele, fehlende Ziel-Elternverzeichnisse und Quelle == Ziel werden abgelehnt.
+Verhalten von `movara mv`: scannen und anzeigen, welcher Agentenzustand den alten Pfad referenziert → bestätigen → Verzeichnis verschieben (dateisystemübergreifend automatisch per Kopieren+Löschen) → jeden Agenten migrieren → Bericht mit Undo-Kennung ausgeben. Geht etwas schief, stellt ein einziges `movara undo` sowohl die Verzeichnisposition als auch den gesamten Agentenzustand wieder her. Nur Verzeichnisse werden akzeptiert (Dateien tragen keinen Agentenverlauf — normales `mv` verwenden); vorhandene Ziele, fehlende Ziel-Elternverzeichnisse und Quelle == Ziel werden abgelehnt.
 
-| Option | Bedeutung |
+### Befehle
+
+| Befehl | Zweck |
 |---|---|
-| `--agents claude,codex` | auf bestimmte Agenten beschränken (Standard: alle installierten) |
-| `--extra-root PATH` | zusätzlich einen beliebigen Baum umschreiben (Dotfiles, IDE-Konfigurationen); wiederholbar |
-| `--deep` | auch Pfadnennungen im Chat-Inhalt / Logs umschreiben (Standard: nur Identitätsfelder — cwd, directory, project, …) |
-| `--backup-dir DIR` | Sicherungsverzeichnis (Standard `~/.movara/backups`) |
-| `--dry-run` | nur Bericht |
-| `--yes` | Bestätigungsaufforderung überspringen (mv, migrate) |
-| `--json` | ein einzelnes JSON-Dokument auf stdout ausgeben (maschinenlesbar) |
+| `movara mv <SRC> <DST>` | verschiebt das Verzeichnis (vorhandenes DST = hineinverschieben) und migriert alle Agenten in einem Schritt — der Alltags-mv-Ersatz |
+| `movara scan --from <OLD> [--to <NEW>]` | schreibgeschützter Bericht, welcher Agentenzustand einen Pfad referenziert; `--to` dient nur der Umbenennungsvorschau |
+| `movara migrate --from <OLD> --to <NEW>` | schlüsselt den Zustand neu, nachdem das Verzeichnis anderswohin verschoben wurde; `--move-project` verschiebt zuerst das Verzeichnis |
+| `movara undo --id <ID>` | macht eine Migration vollständig rückgängig (siehe unten) |
+| `movara backups` | listet die Migrationsjournale (siehe unten) |
+| `movara agents` | listet unterstützte Agenten und deren Installationsstatus |
+
+### Optionen
+
+| Option | gilt für | Bedeutung |
+|---|---|---|
+| `--lang CODE` | global | Sprache der Oberfläche überschreiben (en, zh-CN, ja, ko, es, fr, de, pt-BR) |
+| `--agents LISTE` | scan, migrate, mv | Kommaliste; auf bestimmte Agenten beschränken (Standard: alle installierten) |
+| `--extra-root PATH` | scan, migrate, mv | zusätzlich einen beliebigen Baum umschreiben (Dotfiles, IDE-Konfigurationen); wiederholbar |
+| `--deep` | migrate, mv | auch Pfadnennungen im Chat-Inhalt / Logs umschreiben (Standard: nur Identitätsfelder — cwd, directory, project, …) |
+| `--backup-dir DIR` | migrate, mv, undo, backups | Wurzel der Sicherungsjournale (Standard `~/.movara/backups`) |
+| `--dry-run` | migrate, mv | nur Bericht, keine Änderung |
+| `--yes` | migrate, mv | Bestätigungsaufforderung überspringen |
+| `--move-project` | migrate | zuerst das Projektverzeichnis selbst verschieben |
+| `--json` | agents, scan, migrate, mv, backups | ein einzelnes JSON-Dokument auf stdout ausgeben (maschinenlesbar) |
+
+### Undo & Backups
+
+Jedes `mv` / `migrate` schreibt vor jeder Änderung ein Journal nach
+`~/.movara/backups/<id>/`: Kopien jeder Datei, die sich ändern wird,
+vollständige SQLite-Datenbanken (nach einem `wal_checkpoint`) und ein
+Protokoll der Umbenennungen einschließlich des verschobenen
+Projektverzeichnisses.
+
+- **`movara backups`** listet die Journale — Kennung, Datum, alter → neuer
+  Pfad, betroffene Agenten, Zähler für Dateien/Datenbanken/Umbenennungen
+  (`--json` für Skripte). Das Journal ist die Undo-Einheit: Filtern nach
+  Pfad oder Agent wird heute nicht unterstützt; alte Journale von Hand
+  löschen, um Platz zu schaffen.
+- **`movara undo --id <ID>`** spielt ein Journal rückwärts — Dateiinhalte
+  kehren zurück, Datenbanken werden zurückgetauscht, Umbenennungen laufen
+  rückwärts und das verschobene Verzeichnis geht nach Hause. Nutzen Sie es,
+  wenn eine Migration den falschen Pfad traf, während des Verschiebens noch
+  ein Agent lief oder Sie einfach das alte Layout zurückwollen. Undo ist
+  alles-oder-nichts pro Migration: eine Kennung macht genau diese Migration
+  vollständig rückgängig, nicht einen einzelnen Agenten oder eine Datei,
+  und sollte vor einer neuen Migration derselben Pfade laufen.
 
 ## Sicherheit
 

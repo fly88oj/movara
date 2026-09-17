@@ -19,13 +19,47 @@ Cursor、Windsurf……）把会话记录按**项目路径**做键：目录名�
 
 ## 安装
 
-Rust 实现，无运行时依赖，支持 Linux / macOS / Windows：
+Rust 实现，无运行时依赖，支持 Linux / macOS / Windows。每个
+[Release](https://github.com/fly88oj/movara/releases) 都附带预编译包——
+以下文件名以 `1.0.0` 为例，请替换为实际下载的版本号。
+
+**Debian / Ubuntu（.deb）**
 
 ```bash
-# 每个打标签的 Release 由 GitHub Actions 构建并附带预编译产物：
-#   tar.gz / zip（含 exe）与 .deb / .rpm / .dmg 原生安装包
-#   https://github.com/fly88oj/movara/releases
+sudo dpkg -i movara_1.0.0-1_amd64.deb
+```
 
+**Fedora / RHEL（.rpm）**
+
+```bash
+sudo dnf install movara-1.0.0-1.x86_64.rpm
+```
+
+**其他 Linux 发行版（tar.gz）**
+
+```bash
+tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+**macOS Apple Silicon（.dmg 或 tar.gz）**
+
+```bash
+# 打开 dmg 把 bin/movara 拷到 /usr/local/bin，或：
+tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+Intel Mac 通过 Rosetta 2 运行 arm64 版本，或从源码构建。
+
+**Windows（zip）**
+
+解压 `movara-1.0.0-x86_64-pc-windows-msvc.zip`，把 `movara.exe` 所在
+目录加入 `PATH`。
+
+**从源码安装**
+
+```bash
 cargo install --path .        # 提供 movara 命令
 ```
 
@@ -55,20 +89,50 @@ movara backups
 movara undo --id 20260903-131427-644777
 ```
 
-`movara` 的行为：先扫描并显示哪些 Agent 状态引用了旧路径 → 确认 →
+`movara mv` 的行为：先扫描并显示哪些 Agent 状态引用了旧路径 → 确认 →
 `mv` 项目目录（跨文件系统自动退化为复制+删除）→ 逐个 Agent 迁移 → 输出
 报告与撤销编号。任何一步出问题，一条 `movara undo` 同时还原目录位置
 和所有 Agent 状态。仅接受目录；目标已存在、父目录缺失、源==目标均拒绝。
 
-| 选项 | 说明 |
+### 子命令
+
+| 命令 | 用途 |
 |---|---|
-| `--agents claude,codex` | 只处理指定 Agent（默认：所有已安装的） |
-| `--extra-root PATH` | 额外重写任意目录树（dotfile、IDE 配置等），可重复 |
-| `--deep` | 连聊天内容/日志里出现的旧路径也改写（默认只改身份字段） |
-| `--backup-dir DIR` | 备份目录（默认 `~/.movara/backups`） |
-| `--dry-run` | 只报告 |
-| `--yes` | 跳过确认提示（mv、migrate） |
-| `--json` | stdout 输出单个 JSON 文档（供脚本消费） |
+| `movara mv <SRC> <DST>` | 搬目录（DST 已存在则移入其中）并一步迁移所有 Agent——日常替代 mv |
+| `movara scan --from <OLD> [--to <NEW>]` | 只读报告哪些 Agent 状态引用了某路径；`--to` 仅用于改名目标预览 |
+| `movara migrate --from <OLD> --to <NEW>` | 目录已被其他方式移动后补迁移；`--move-project` 先移动目录本身 |
+| `movara undo --id <ID>` | 完整逆转一次迁移（见下） |
+| `movara backups` | 列出迁移日志（见下） |
+| `movara agents` | 列出支持的 Agent 及安装状态 |
+
+### 选项
+
+| 选项 | 适用范围 | 说明 |
+|---|---|---|
+| `--lang CODE` | 全局 | 覆盖界面语言（en, zh-CN, ja, ko, es, fr, de, pt-BR） |
+| `--agents LIST` | scan, migrate, mv | 逗号列表；只处理指定 Agent（默认：所有已安装的） |
+| `--extra-root PATH` | scan, migrate, mv | 额外重写任意目录树（dotfile、IDE 配置等），可重复 |
+| `--deep` | migrate, mv | 连聊天内容/日志里出现的旧路径也改写（默认只改身份字段——cwd、directory、project 等） |
+| `--backup-dir DIR` | migrate, mv, undo, backups | 备份日志根目录（默认 `~/.movara/backups`） |
+| `--dry-run` | migrate, mv | 只报告，不改动 |
+| `--yes` | migrate, mv | 跳过确认提示 |
+| `--move-project` | migrate | 重写引用前先移动项目目录本身 |
+| `--json` | agents, scan, migrate, mv, backups | stdout 输出单个 JSON 文档（供脚本消费） |
+
+### 撤销与备份
+
+每次 `mv` / `migrate` 在改动任何东西之前，都会在
+`~/.movara/backups/<id>/` 写入一份日志：待改文件的副本、完整的 SQLite
+数据库（先做 `wal_checkpoint`）、改名台账（含被移动的项目目录本身）。
+
+- **`movara backups`** 列出所有日志——编号、日期、旧→新路径、涉及的
+  Agent、文件/数据库/改名计数（`--json` 供脚本使用）。日志是撤销的最小
+  单位：目前不支持按路径或按 Agent 过滤；磁盘空间紧张时可手动删除旧日志。
+- **`movara undo --id <ID>`** 将一条日志逆向回放——文件内容还原、数据库
+  换回、改名反转、被移动的目录回到原位。迁移目标选错、迁移时有 Agent
+  还在运行、或者单纯想回到旧布局时使用。撤销以单次迁移为单位、整体回退：
+  一个编号逆转的是整次迁移，不能只撤某个 Agent 或某个文件；同一批路径
+  再次迁移之前应先执行撤销。
 
 ## 安全
 
