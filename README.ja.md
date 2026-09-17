@@ -23,14 +23,50 @@ JSONL・SQLite・protobuf ファイルの中にあります。ディレクトリ
 
 ## インストール
 
-Rust 実装。実行時依存なし、Linux / macOS / Windows に対応：
+Rust 実装。実行時依存なし、Linux / macOS / Windows に対応。各
+[Release](https://github.com/fly88oj/movara/releases) にビルド済み
+パッケージが同梱されます。以下のファイル名は `1.0.0` の例なので、
+ダウンロードしたバージョンに置き換えてください。
+
+**Debian / Ubuntu（.deb）**
 
 ```bash
-# タグ付き Release ごとに GitHub Actions がビルド成果物を公開します：
-#   tar.gz / zip（exe を含む）と .deb / .rpm / .dmg ネイティブパッケージ
-#   https://github.com/fly88oj/movara/releases
+sudo dpkg -i movara_1.0.0-1_amd64.deb
+```
 
-cargo install --path .        # Movara コマンドが使えます
+**Fedora / RHEL（.rpm）**
+
+```bash
+sudo dnf install movara-1.0.0-1.x86_64.rpm
+```
+
+**その他の Linux（tar.gz）**
+
+```bash
+tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+**macOS Apple Silicon（.dmg / tar.gz）**
+
+```bash
+# dmg を開いて bin/movara を /usr/local/bin にコピー、または：
+tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+Intel Mac は Rosetta 2 経由で arm64 ビルドを実行するか、ソースから
+ビルドしてください。
+
+**Windows（zip）**
+
+`movara-1.0.0-x86_64-pc-windows-msvc.zip` を展開し、`movara.exe` の
+あるフォルダを `PATH` に追加してください。
+
+**ソースから**
+
+```bash
+cargo install --path .        # movara コマンドが使えます
 ```
 
 UI 言語はシステムロケールに自動追従します（English / 简体中文 / 日本語 /
@@ -60,7 +96,7 @@ movara backups
 movara undo --id 20260903-131427-644777
 ```
 
-`movara` の動作：旧パスを参照するエージェント状態をスキャンして表示 →
+`movara mv` の動作：旧パスを参照するエージェント状態をスキャンして表示 →
 確認 → ディレクトリを `mv`（ファイルシステムをまたぐ場合はコピー+削除へ
 自動フォールバック）→ 各エージェントを移行 → undo ID 付きのレポートを
 出力。問題が起きても `movara undo` 1 回でディレクトリ位置と全エージェント
@@ -68,15 +104,50 @@ movara undo --id 20260903-131427-644777
 履歴がないため通常の `mv` を）。移動先が既に存在・親ディレクトリが無い・
 src == dst は拒否します。
 
-| オプション | 意味 |
+### サブコマンド
+
+| コマンド | 用途 |
 |---|---|
-| `--agents claude,codex` | 対象エージェントを限定（デフォルト：全て） |
-| `--extra-root PATH` | 任意のツリーも書き換え。繰り返し可 |
-| `--deep` | チャット本文内の旧パスも書き換え（デフォルトは身分フィールドのみ） |
-| `--backup-dir DIR` | バックアップディレクトリ（デフォルト `~/.movara/backups`） |
-| `--dry-run` | レポートのみ |
-| `--yes` | 確認プロンプトをスキップ（mv・migrate） |
-| `--json` | stdout に単一の JSON ドキュメントを出力 |
+| `movara mv <SRC> <DST>` | ディレクトリを移動（DST が既存なら中へ）し全エージェントを一括移行 —— 日常の mv 代替 |
+| `movara scan --from <OLD> [--to <NEW>]` | 読み取り専用で、パスを参照するエージェント状態を報告。`--to` はリネーム先プレビュー用のみ |
+| `movara migrate --from <OLD> --to <NEW>` | ディレクトリを他の手段で移動済みの状態から再キーイング。`--move-project` は先にディレクトリ自体を移動 |
+| `movara undo --id <ID>` | 1 回の移行を完全に巻き戻す（下記） |
+| `movara backups` | 移行ジャーナルの一覧（下記） |
+| `movara agents` | 対応エージェントとインストール状態の一覧 |
+
+### オプション
+
+| オプション | 適用範囲 | 意味 |
+|---|---|---|
+| `--lang CODE` | グローバル | 表示言語を上書き（en, zh-CN, ja, ko, es, fr, de, pt-BR） |
+| `--agents LIST` | scan, migrate, mv | カンマ区切りで対象エージェントを限定（デフォルト：全て） |
+| `--extra-root PATH` | scan, migrate, mv | 任意のツリーも書き換え。繰り返し可 |
+| `--deep` | migrate, mv | チャット本文・ログ内の旧パスも書き換え（デフォルトは身分フィールドのみ） |
+| `--backup-dir DIR` | migrate, mv, undo, backups | バックアップジャーナルのルート（デフォルト `~/.movara/backups`） |
+| `--dry-run` | migrate, mv | レポートのみ。何も変更しない |
+| `--yes` | migrate, mv | 確認プロンプトをスキップ |
+| `--move-project` | migrate | 再キーイングの前にプロジェクトディレクトリ自体を移動 |
+| `--json` | agents, scan, migrate, mv, backups | stdout に単一の JSON ドキュメントを出力 |
+
+### undo とバックアップ
+
+`mv` / `migrate` は何かを変更する前に、`~/.movara/backups/<id>/` に
+ジャーナルを書き出します：変更対象ファイルのコピー、SQLite データベース
+全体（`wal_checkpoint` 実行後）、移動したプロジェクトディレクトリを含む
+リネーム台帳です。
+
+- **`movara backups`** はジャーナルの一覧（ID・日付・旧→新パス・対象
+  エージェント・ファイル/DB/リネーム数、`--json` はスクリプト用）を
+  表示します。ジャーナルが undo の単位で、パスやエージェントによる
+  絞り込みは現在サポートされていません。古いジャーナルは手動で削除して
+  ディスクを解放できます。
+- **`movara undo --id <ID>`** はジャーナルを逆再生します —— ファイル内容
+  を復元し、DB を戻し、リネームを巻き戻し、移動済みディレクトリを元の
+  場所へ戻します。移行先を間違えた、移行中にエージェントが動いていた、
+  旧レイアウトに戻したい、といった場面で使います。undo は移行 1 回分の
+  全か無かです。1 つの ID でその移行全体を巻き戻し、特定エージェントや
+  ファイルだけを戻すことはできません。同じパスを再移行する前に実行して
+  ください。
 
 ## 安全性
 

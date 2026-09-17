@@ -24,13 +24,49 @@ completo.
 ## Instalación
 
 Implementación en Rust, sin dependencias en tiempo de ejecución,
-disponible en Linux / macOS / Windows:
+disponible en Linux / macOS / Windows. Cada
+[release](https://github.com/fly88oj/movara/releases) incluye paquetes
+precompilados; los nombres de archivo siguientes usan `1.0.0`, sustitúyelo
+por la versión que descargues.
+
+**Debian / Ubuntu (.deb)**
 
 ```bash
-# cada Release etiquetada publica artefactos construidos por GitHub Actions:
-#   tar.gz / zip (incluye exe) y paquetes nativos .deb / .rpm / .dmg
-#   https://github.com/fly88oj/movara/releases
+sudo dpkg -i movara_1.0.0-1_amd64.deb
+```
 
+**Fedora / RHEL (.rpm)**
+
+```bash
+sudo dnf install movara-1.0.0-1.x86_64.rpm
+```
+
+**Otras distribuciones Linux (tar.gz)**
+
+```bash
+tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+**macOS Apple Silicon (.dmg o tar.gz)**
+
+```bash
+# abre el dmg y copia bin/movara a /usr/local/bin, o:
+tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+Los Mac Intel ejecutan la compilación arm64 bajo Rosetta 2 o compilan desde
+el código fuente.
+
+**Windows (zip)**
+
+Extrae `movara-1.0.0-x86_64-pc-windows-msvc.zip` y pon `movara.exe` en tu
+`PATH`.
+
+**Desde el código fuente**
+
+```bash
 cargo install --path .        # instala el comando `movara`
 ```
 
@@ -61,7 +97,7 @@ movara backups
 movara undo --id 20260903-131427-644777
 ```
 
-Comportamiento de `movara`: escanear y mostrar qué estado de agente
+Comportamiento de `movara mv`: escanear y mostrar qué estado de agente
 referencia la ruta antigua → confirmar → `mv` del directorio (con reserva
 automática de copiar + eliminar si los sistemas de archivos difieren) →
 migrar cada agente → imprimir un informe con el id de deshacer. Si algo
@@ -71,15 +107,50 @@ directorio como todo el estado de los agentes. Solo acepta directorios
 rechazan destinos existentes, directorios padre inexistentes y
 origen == destino.
 
-| opción | significado |
+### Comandos
+
+| comando | propósito |
 |---|---|
-| `--agents claude,codex` | limitar a agentes concretos (por defecto: todos) |
-| `--extra-root RUTA` | reescribir también un árbol arbitrario; repetible |
-| `--deep` | reescribir también menciones dentro del contenido del chat / registros (por defecto: solo campos de identidad) |
-| `--backup-dir DIR` | directorio de copias de seguridad (por defecto `~/.movara/backups`) |
-| `--dry-run` | solo informe |
-| `--yes` | omitir el aviso de confirmación (mv, migrate) |
-| `--json` | emitir un único documento JSON en stdout |
+| `movara mv <SRC> <DST>` | mueve el directorio (DST existente = mover dentro) y migra todos los agentes en un paso — el reemplazo cotidiano de mv |
+| `movara scan --from <OLD> [--to <NEW>]` | informe de solo lectura de qué estado de agente referencia una ruta; `--to` solo añade vistas previas del destino |
+| `movara migrate --from <OLD> --to <NEW>` | recodifica el estado tras mover el directorio por otros medios; `--move-project` mueve primero el directorio |
+| `movara undo --id <ID>` | revierte por completo una migración (ver abajo) |
+| `movara backups` | lista los diarios de migración (ver abajo) |
+| `movara agents` | lista los agentes admitidos y su estado de instalación |
+
+### Opciones
+
+| opción | aplica a | significado |
+|---|---|---|
+| `--lang CODE` | global | sobrescribe el idioma de la interfaz (en, zh-CN, ja, ko, es, fr, de, pt-BR) |
+| `--agents LISTA` | scan, migrate, mv | lista separada por comas; limitar a agentes concretos (por defecto: todos) |
+| `--extra-root RUTA` | scan, migrate, mv | reescribir también un árbol arbitrario; repetible |
+| `--deep` | migrate, mv | reescribir también menciones dentro del contenido del chat / registros (por defecto: solo campos de identidad) |
+| `--backup-dir DIR` | migrate, mv, undo, backups | raíz de los diarios de copia (por defecto `~/.movara/backups`) |
+| `--dry-run` | migrate, mv | solo informe, sin cambios |
+| `--yes` | migrate, mv | omitir el aviso de confirmación |
+| `--move-project` | migrate | mover primero el directorio del proyecto |
+| `--json` | agents, scan, migrate, mv, backups | emitir un único documento JSON en stdout |
+
+### Deshacer y copias de seguridad
+
+Cada `mv` / `migrate` escribe un diario en `~/.movara/backups/<id>/` antes
+de cambiar nada: copias de cada archivo que va a modificarse, bases SQLite
+completas (tras un `wal_checkpoint`) y un registro de renombrados que
+incluye el directorio movido.
+
+- **`movara backups`** lista los diarios — id, fecha, ruta antigua → nueva,
+  agentes afectados, recuentos de archivos/bases/renombrados (`--json` para
+  scripts). El diario es la unidad de deshacer: filtrar por ruta o agente no
+  está soportado hoy; borra a mano los diarios antiguos para liberar disco.
+- **`movara undo --id <ID>`** reproduce un diario hacia atrás — los archivos
+  vuelven a su contenido, las bases se intercambian, los renombrados se
+  revierten y el directorio movido regresa a su sitio. Úsalo cuando una
+  migración apuntó a la ruta equivocada, un agente seguía ejecutándose
+  durante el movimiento o simplemente quieres el diseño antiguo. Deshacer es
+  todo-o-nada por migración: un id revierte esa migración completa, no un
+  solo agente o archivo, y debe ejecutarse antes de una nueva migración de
+  las mismas rutas.
 
 ## Seguridad
 

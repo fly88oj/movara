@@ -21,17 +21,50 @@ re-keys all of those references to the new path in one shot, with full undo.
 
 ## Install
 
-Rust implementation, no runtime dependencies, runs on Linux /
-macOS / Windows:
+Rust implementation, no runtime dependencies, runs on Linux / macOS /
+Windows. Prebuilt packages are attached to every
+[release](https://github.com/fly88oj/movara/releases) — the file names
+below use `1.0.0`; substitute the version you downloaded.
+
+**Debian / Ubuntu (.deb)**
 
 ```bash
-# prebuilt binaries (tar.gz / zip) and native packages (.deb / .rpm / .dmg)
-# are attached to every tagged release by GitHub Actions
-#   https://github.com/fly88oj/movara/releases
+sudo dpkg -i movara_1.0.0-1_amd64.deb
+```
 
-# from source
+**Fedora / RHEL (.rpm)**
+
+```bash
+sudo dnf install movara-1.0.0-1.x86_64.rpm
+```
+
+**Other Linux (tar.gz)**
+
+```bash
+tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+**macOS Apple Silicon (.dmg or tar.gz)**
+
+```bash
+# open the dmg and copy bin/movara to /usr/local/bin, or:
+tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+Intel Macs run the arm64 build under Rosetta 2 or build from source.
+
+**Windows (zip)**
+
+Extract `movara-1.0.0-x86_64-pc-windows-msvc.zip` and put `movara.exe`
+on your `PATH`.
+
+**From source**
+
+```bash
 cargo install --path .        # provides the `movara` binary
-cargo install movara        # once published to crates.io
+cargo install movara          # once published to crates.io
 ```
 
 The UI language follows the system locale automatically (English, 简体中文,
@@ -62,7 +95,7 @@ movara backups
 movara undo --id 20260903-131427-644777
 ```
 
-`movara` behaviour: scan and show which agent state references the old
+`movara mv` behaviour: scan and show which agent state references the old
 path → confirm → `mv` the directory (cross-filesystem falls back to
 copy+remove) → migrate every agent → print a report with the undo id. If
 anything goes wrong, a single `movara undo` restores both the directory
@@ -70,15 +103,49 @@ location and all agent state. Only directories are accepted (files carry no
 agent history — use plain `mv`); existing targets, missing target parents
 and src == dst are refused.
 
-| option | meaning |
+### Commands
+
+| command | purpose |
 |---|---|
-| `--agents claude,codex` | limit to specific agents (default: all installed) |
-| `--extra-root PATH` | also rewrite an arbitrary tree (dotfiles, IDE configs); repeatable |
-| `--deep` | also rewrite path mentions inside chat content / logs (default: identity fields only — cwd, directory, project, …) |
-| `--backup-dir DIR` | backup directory (default `~/.movara/backups`) |
-| `--dry-run` | report only |
-| `--yes` | skip the confirmation prompt (mv, migrate) |
-| `--json` | emit a single JSON document on stdout (machine-readable) |
+| `movara mv <SRC> <DST>` | move the directory (existing `DST` = move into it) and migrate every agent in one step — the everyday `mv` replacement |
+| `movara scan --from <OLD> [--to <NEW>]` | read-only report of every agent state location referencing a path; `--to` only adds rename-target previews |
+| `movara migrate --from <OLD> --to <NEW>` | rekey agent state after the directory was already moved by other means; `--move-project` moves the directory first |
+| `movara undo --id <ID>` | fully reverse one migration (see below) |
+| `movara backups` | list migration journals (see below) |
+| `movara agents` | list supported agents and whether each is installed |
+
+### Options
+
+| option | applies to | meaning |
+|---|---|---|
+| `--lang CODE` | global | override the display language (en, zh-CN, ja, ko, es, fr, de, pt-BR) |
+| `--agents LIST` | scan, migrate, mv | comma list; limit to specific agents (default: all installed) |
+| `--extra-root PATH` | scan, migrate, mv | also rewrite an arbitrary tree (dotfiles, IDE configs); repeatable |
+| `--deep` | migrate, mv | also rewrite path mentions inside chat content / logs (default: identity fields only — cwd, directory, project, …) |
+| `--backup-dir DIR` | migrate, mv, undo, backups | backup journal root (default `~/.movara/backups`) |
+| `--dry-run` | migrate, mv | report only, change nothing |
+| `--yes` | migrate, mv | skip the confirmation prompt |
+| `--move-project` | migrate | move the project directory itself before rekeying |
+| `--json` | agents, scan, migrate, mv, backups | emit a single JSON document on stdout (machine-readable) |
+
+### Undo & backups
+
+Every `mv` / `migrate` writes a journal under `~/.movara/backups/<id>/`
+before changing anything: copies of each file about to change, whole
+SQLite databases (after a `wal_checkpoint`), and a ledger of renames
+including the moved project directory.
+
+- **`movara backups`** lists journals — id, date, old → new path, agents
+  touched, file/database/rename counts (`--json` for scripts). The
+  journal is the unit of undo: filtering by path or agent is not
+  supported today; delete old journals by hand to reclaim disk space.
+- **`movara undo --id <ID>`** replays one journal backwards — file
+  contents return, databases swap back, renames reverse, and the moved
+  directory goes home. Use it when a migration targeted the wrong path,
+  an agent was still running during the move, or you simply want the
+  old layout back. Undo is all-or-nothing per migration: one id reverts
+  that entire migration, not a single agent or file, and it should run
+  before a new migration of the same paths.
 
 ## Safety
 

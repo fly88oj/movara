@@ -15,13 +15,46 @@ La plupart des agents de codage IA (Claude Code, Codex, la famille Gemini CLI, O
 
 ## Installation
 
-Implémenté en Rust, sans dépendance à l'exécution, fonctionne sur Linux / macOS / Windows :
+Implémenté en Rust, sans dépendance à l'exécution, fonctionne sur Linux / macOS / Windows. Chaque [release](https://github.com/fly88oj/movara/releases) fournit des paquets précompilés ; les noms de fichiers ci-dessous utilisent `1.0.0`, remplacez-le par la version téléchargée.
+
+**Debian / Ubuntu (.deb)**
 
 ```bash
-# les binaires précompilés (tar.gz / zip) et les paquets natifs (.deb / .rpm / .dmg)
-# sont attachés à chaque version étiquetée par GitHub Actions
-#   https://github.com/fly88oj/movara/releases
+sudo dpkg -i movara_1.0.0-1_amd64.deb
+```
 
+**Fedora / RHEL (.rpm)**
+
+```bash
+sudo dnf install movara-1.0.0-1.x86_64.rpm
+```
+
+**Autres distributions Linux (tar.gz)**
+
+```bash
+tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+**macOS Apple Silicon (.dmg ou tar.gz)**
+
+```bash
+# ouvrez le dmg et copiez bin/movara dans /usr/local/bin, ou :
+tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+sudo cp movara /usr/local/bin/
+```
+
+Les Mac Intel exécutent la build arm64 via Rosetta 2 ou compilent depuis
+les sources.
+
+**Windows (zip)**
+
+Extrayez `movara-1.0.0-x86_64-pc-windows-msvc.zip` et placez `movara.exe`
+dans votre `PATH`.
+
+**Depuis les sources**
+
+```bash
 cargo install --path .        # fournit la commande `movara`
 ```
 
@@ -51,17 +84,53 @@ movara backups
 movara undo --id 20260903-131427-644777
 ```
 
-Comportement de `movara` : scanner et montrer quel état d'agent référence l'ancien chemin → confirmation → `mv` du répertoire (recopie + suppression si les systèmes de fichiers diffèrent) → migration de chaque agent → rapport avec l'identifiant d'annulation. En cas de problème, un simple `movara undo` restaure à la fois l'emplacement du répertoire et tout l'état des agents. Seuls les répertoires sont acceptés (les fichiers ne portent pas d'historique d'agent — utilisez `mv`) ; les cibles existantes, les parents de cible manquants et source == cible sont refusés.
+Comportement de `movara mv` : scanner et montrer quel état d'agent référence l'ancien chemin → confirmation → `mv` du répertoire (recopie + suppression si les systèmes de fichiers diffèrent) → migration de chaque agent → rapport avec l'identifiant d'annulation. En cas de problème, un simple `movara undo` restaure à la fois l'emplacement du répertoire et tout l'état des agents. Seuls les répertoires sont acceptés (les fichiers ne portent pas d'historique d'agent — utilisez `mv`) ; les cibles existantes, les parents de cible manquants et source == cible sont refusés.
 
-| option | signification |
+### Commandes
+
+| commande | rôle |
 |---|---|
-| `--agents claude,codex` | se limiter à certains agents (par défaut : tous ceux installés) |
-| `--extra-root PATH` | réécrire aussi une arborescence arbitraire (dotfiles, configs d'IDE) ; répétable |
-| `--deep` | réécrire aussi les mentions de chemin dans le contenu des conversations / journaux (par défaut : champs d'identité uniquement — cwd, directory, project, …) |
-| `--backup-dir DIR` | répertoire de sauvegarde (par défaut `~/.movara/backups`) |
-| `--dry-run` | rapport seul |
-| `--yes` | passer l'invite de confirmation (mv, migrate) |
-| `--json` | émettre un unique document JSON sur stdout (exploitable par machine) |
+| `movara mv <SRC> <DST>` | déplace le répertoire (DST existant = déplacement à l'intérieur) et migre tous les agents en une étape — le remplaçant quotidien de mv |
+| `movara scan --from <OLD> [--to <NEW>]` | rapport en lecture seule des états d'agent référençant un chemin ; `--to` sert uniquement aux aperçus de renommage |
+| `movara migrate --from <OLD> --to <NEW>` | recode l'état après un déplacement fait par d'autres moyens ; `--move-project` déplace d'abord le répertoire |
+| `movara undo --id <ID>` | annule entièrement une migration (voir ci-dessous) |
+| `movara backups` | liste les journaux de migration (voir ci-dessous) |
+| `movara agents` | liste les agents pris en charge et leur état d'installation |
+
+### Options
+
+| option | s'applique à | signification |
+|---|---|---|
+| `--lang CODE` | global | surcharge la langue de l'interface (en, zh-CN, ja, ko, es, fr, de, pt-BR) |
+| `--agents LISTE` | scan, migrate, mv | liste à virgules ; se limiter à certains agents (par défaut : tous ceux installés) |
+| `--extra-root PATH` | scan, migrate, mv | réécrire aussi une arborescence arbitraire (dotfiles, configs d'IDE) ; répétable |
+| `--deep` | migrate, mv | réécrire aussi les mentions de chemin dans le contenu des conversations / journaux (par défaut : champs d'identité uniquement — cwd, directory, project, …) |
+| `--backup-dir DIR` | migrate, mv, undo, backups | racine des journaux de sauvegarde (par défaut `~/.movara/backups`) |
+| `--dry-run` | migrate, mv | rapport seul, aucun changement |
+| `--yes` | migrate, mv | passer l'invite de confirmation |
+| `--move-project` | migrate | déplacer d'abord le répertoire du projet |
+| `--json` | agents, scan, migrate, mv, backups | émettre un unique document JSON sur stdout (exploitable par machine) |
+
+### Annulation et sauvegardes
+
+Chaque `mv` / `migrate` écrit un journal dans `~/.movara/backups/<id>/`
+avant toute modification : copies de chaque fichier sur le point de changer,
+bases SQLite complètes (après un `wal_checkpoint`) et un registre des
+renommages incluant le répertoire déplacé.
+
+- **`movara backups`** liste les journaux — id, date, ancien → nouveau
+  chemin, agents touchés, compteurs fichiers/bases/renommages (`--json`
+  pour les scripts). Le journal est l'unité d'annulation : aucun filtre par
+  chemin ou par agent aujourd'hui ; supprimez à la main les anciens
+  journaux pour libérer de l'espace.
+- **`movara undo --id <ID>`** rejoue un journal à l'envers — les contenus de
+  fichiers reviennent, les bases sont échangées, les renommages s'inversent
+  et le répertoire déplacé rentre chez lui. À utiliser quand une migration
+  visait le mauvais chemin, qu'un agent tournait encore pendant le
+  déplacement, ou simplement pour retrouver l'ancienne disposition.
+  L'annulation est tout-ou-rien par migration : un id revertit toute la
+  migration, pas un seul agent ou fichier, et doit précéder toute nouvelle
+  migration des mêmes chemins.
 
 ## Sécurité
 
