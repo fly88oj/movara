@@ -104,6 +104,8 @@ movara undo --id 20260903-131427-644777
 | `movara undo --id <ID>` | 完整逆转一次迁移（见下） |
 | `movara backups` | 列出迁移日志（见下） |
 | `movara agents` | 列出支持的 Agent 及安装状态 |
+| `movara export [--path PATH]... [--agents LIST]` | 把 Agent 状态打包为可携带的 `.tar.gz` 档案——默认整台主机，也可按项目路径 / Agent 过滤 |
+| `movara import <ARCHIVE> [--rebase OLD:NEW]...` | 在本机恢复档案并按规则重定基路径；像迁移一样记日志，可用 `movara undo` 完整撤销 |
 
 ### 选项
 
@@ -118,6 +120,11 @@ movara undo --id 20260903-131427-644777
 | `--yes` | migrate, mv | 跳过确认提示 |
 | `--move-project` | migrate | 重写引用前先移动项目目录本身 |
 | `--json` | agents, scan, migrate, mv, backups | stdout 输出单个 JSON 文档（供脚本消费） |
+| `--out FILE` | export | 档案路径（默认 `movara-export-<时间戳>.tar.gz`） |
+| `--path PATH` | export | 只导出引用此项目路径的状态（可重复；与 `--agents` 取交集） |
+| `--rebase OLD:NEW` | import | 路径映射，可重复；重叠与链式规则会被拒绝 |
+| `--on-conflict POLICY` | import | `skip`（默认）或 `replace` 已存在的本地状态 |
+| `--allow-missing-path` | import | 档案路径在本地不存在时仍继续 |
 
 ### 撤销与备份
 
@@ -134,6 +141,8 @@ movara undo --id 20260903-131427-644777
   一个编号逆转的是整次迁移，不能只撤某个 Agent 或某个文件；同一批路径
   再次迁移之前应先执行撤销。
 
+`export` / `import` 同样全程记日志：`undo` 可完整逆转一次导入，包括它新建的状态。
+
 ## 安全
 
 - **边界感知替换**：`/a/abc` 不会匹配 `/a/abc2`、`/a/abc-def`；
@@ -143,6 +152,7 @@ movara undo --id 20260903-131427-644777
   改名记录在案，`undo` 逐项还原；`movara` 搬的目录也会一并还原。
 - 目标已存在时跳过改名并列出；`--from /` 拒绝执行。
 - 建议先关掉正在运行的对应 Agent（WAL 库会警告但不会损坏）。
+
 
 ## 支持范围
 

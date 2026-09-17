@@ -95,6 +95,8 @@ Comportamento do `movara mv`: escanear e mostrar qual estado de agente referenci
 | `movara undo --id <ID>` | reverte uma migração por completo (veja abaixo) |
 | `movara backups` | lista os diários de migração (veja abaixo) |
 | `movara agents` | lista os agentes suportados e o status de instalação |
+| `movara export [--path CAMINHO]... [--agents LISTA]` | grava um arquivo `.tar.gz` portátil do estado — o host inteiro, ou filtrado por caminho de projeto / agentes |
+| `movara import <ARQUIVO> [--rebase OLD:NEW]...` | restaura um arquivo neste host remapeando caminhos; registrado como uma migração, então `movara undo` o reverte |
 
 ### Opções
 
@@ -109,6 +111,11 @@ Comportamento do `movara mv`: escanear e mostrar qual estado de agente referenci
 | `--yes` | migrate, mv | pular o aviso de confirmação |
 | `--move-project` | migrate | mover primeiro o próprio diretório do projeto |
 | `--json` | agents, scan, migrate, mv, backups | emitir um único documento JSON no stdout (legível por máquina) |
+| `--out FILE` | export | caminho do arquivo (padrão `movara-export-<timestamp>.tar.gz`) |
+| `--path CAMINHO` | export | apenas o estado que referencia este caminho de projeto (repetível; interseção com `--agents`) |
+| `--rebase OLD:NEW` | import | mapeamento de caminhos, repetível; regras sobrepostas ou encadeadas são recusadas |
+| `--on-conflict POLICY` | import | `skip` (padrão) ou `replace` o estado local existente |
+| `--allow-missing-path` | import | prosseguir quando caminhos do arquivo não existirem localmente |
 
 ### Desfazer e backups
 
@@ -131,6 +138,8 @@ que inclui o diretório movido.
   migração inteira, não um único agente ou arquivo, e deve rodar antes de
   uma nova migração dos mesmos caminhos.
 
+Trocas via `export` / `import` são registradas da mesma forma: `undo` reverte uma importação por completo, incluindo o estado que ela criou.
+
 ## Segurança
 
 - **Substituição ciente de limites**: `/a/abc` nunca corresponde a `/a/abc2` ou `/a/abc-def`; URIs `file://`, escapes de JSON e subcaminhos (`/a/abc/sub`) são todos tratados.
@@ -138,6 +147,7 @@ que inclui o diretório movido.
 - Backup completo antes de cada migração: arquivos alterados e bancos SQLite são copiados (após um `wal_checkpoint`), renomeações são registradas em journal, e o `undo` restaura tudo; movimentos de diretório feitos pelo `movara` também são desfeitos.
 - Renomeações são puladas quando o alvo já existe; `--from /` é recusado.
 - Feche os agentes que serão migrados (bancos WAL recebem um aviso, mas não são corrompidos).
+
 
 ## Agentes suportados
 

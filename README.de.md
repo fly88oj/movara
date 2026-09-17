@@ -96,6 +96,8 @@ Verhalten von `movara mv`: scannen und anzeigen, welcher Agentenzustand den alte
 | `movara undo --id <ID>` | macht eine Migration vollständig rückgängig (siehe unten) |
 | `movara backups` | listet die Migrationsjournale (siehe unten) |
 | `movara agents` | listet unterstützte Agenten und deren Installationsstatus |
+| `movara export [--path PFAD]... [--agents LISTE]` | schreibt ein portables `.tar.gz`-Archiv — ganzer Host oder nach Projektpfad / Agenten gefiltert |
+| `movara import <ARCHIV> [--rebase OLD:NEW]...` | stellt ein Archiv auf diesem Host wieder her und rebaset Pfade; wie eine Migration journaleliert, also mit `movara undo` vollständig rückgängig |
 
 ### Optionen
 
@@ -110,6 +112,11 @@ Verhalten von `movara mv`: scannen und anzeigen, welcher Agentenzustand den alte
 | `--yes` | migrate, mv | Bestätigungsaufforderung überspringen |
 | `--move-project` | migrate | zuerst das Projektverzeichnis selbst verschieben |
 | `--json` | agents, scan, migrate, mv, backups | ein einzelnes JSON-Dokument auf stdout ausgeben (maschinenlesbar) |
+| `--out FILE` | export | Archivpfad (Standard `movara-export-<zeitstempel>.tar.gz`) |
+| `--path PFAD` | export | nur Zustand, der diesen Projektpfad referenziert (wiederholbar; Schnitt mit `--agents`) |
+| `--rebase OLD:NEW` | import | Pfad-Mapping, wiederholbar; überlappende und verkettete Regeln werden abgelehnt |
+| `--on-conflict RICHTLINIE` | import | `skip` (Standard) oder `replace` vorhandenen lokalen Zustand |
+| `--allow-missing-path` | import | fortfahren, wenn Archivpfade lokal nicht existieren |
 
 ### Undo & Backups
 
@@ -133,6 +140,8 @@ Projektverzeichnisses.
   vollständig rückgängig, nicht einen einzelnen Agenten oder eine Datei,
   und sollte vor einer neuen Migration derselben Pfade laufen.
 
+Austausch über `export` / `import` wird genauso journaleliert: `undo` macht eine Importierung vollständig rückgängig, inklusive des von ihr erzeugten Zustands.
+
 ## Sicherheit
 
 - **Grenzbewusste Ersetzung**: `/a/abc` matcht niemals `/a/abc2` oder `/a/abc-def`; `file://`-URIs, JSON-Escaping und Unterpfade (`/a/abc/sub`) werden korrekt behandelt.
@@ -140,6 +149,7 @@ Projektverzeichnisses.
 - Vollständige Sicherung vor jeder Migration: veränderte Dateien und SQLite-Datenbanken werden kopiert (nach einem `wal_checkpoint`), Umbenennungen werden protokolliert, und `undo` stellt alles wieder her; von `movara` verschobene Verzeichnisse werden ebenfalls zurückgeholt.
 - Umbenennungen werden übersprungen, wenn das Ziel existiert; `--from /` wird abgelehnt.
 - Schließen Sie die zu migrierenden Agenten vorher (WAL-Datenbanken erhalten eine Warnung, werden aber nicht beschädigt).
+
 
 ## Unterstützte Agenten
 

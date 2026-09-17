@@ -16,6 +16,7 @@
 //! - [`cli`]: the `movara` command line.
 
 pub mod adapters;
+pub mod archive;
 pub mod backup;
 pub mod cli;
 pub mod ctx;

@@ -95,6 +95,8 @@ movara undo --id 20260903-131427-644777
 | `movara undo --id <ID>` | 한 번의 마이그레이션을 완전히 되돌림 (아래 참고) |
 | `movara backups` | 마이그레이션 저널 목록 (아래 참고) |
 | `movara agents` | 지원 에이전트와 설치 여부 목록 |
+| `movara export [--path PATH]... [--agents LIST]` | 에이전트 상태를 휴대 가능한 `.tar.gz` 로 생성 — 호스트 전체 또는 경로/에이전트로 필터 |
+| `movara import <ARCHIVE> [--rebase OLD:NEW]...` | 아카이브를 이 호스트에 복원하고 경로를 재베이스; 마이그레이션처럼 저널에 기록되어 `movara undo` 로 완전히 되돌릴 수 있음 |
 
 ### 옵션
 
@@ -109,6 +111,11 @@ movara undo --id 20260903-131427-644777
 | `--yes` | migrate, mv | 확인 프롬프트 건너뛰기 |
 | `--move-project` | migrate | 다시 키잉하기 전에 프로젝트 디렉터리 자체를 이동 |
 | `--json` | agents, scan, migrate, mv, backups | stdout으로 단일 JSON 문서 출력(기계 판독용) |
+| `--out FILE` | export | 아카이브 경로 (기본값 `movara-export-<타임스탬프>.tar.gz`) |
+| `--path PATH` | export | 이 프로젝트 경로를 참조하는 상태만 (반복 가능; `--agents` 와 교집합) |
+| `--rebase OLD:NEW` | import | 경로 매핑, 반복 지정 가능; 중복·연쇄 규칙은 거부됨 |
+| `--on-conflict POLICY` | import | 기존 로컬 상태에 대해 `skip`(기본값) 또는 `replace` |
+| `--allow-missing-path` | import | 아카이브 경로가 로컬에 없어도 계속 |
 
 ### 되돌리기와 백업
 
@@ -130,6 +137,8 @@ movara undo --id 20260903-131427-644777
   되돌릴 수는 없고, 같은 경로를 다시 마이그레이션하기 전에 실행해야
   합니다.
 
+`export` / `import` 도 같은 방식으로 저널에 기록됩니다. `undo` 는 생성된 상태를 포함해 가져오기를 완전히 되돌립니다.
+
 ## 안전성
 
 - **경계 인식 치환**: `/a/abc`는 `/a/abc2`나 `/a/abc-def`를 절대 건드리지 않습니다. `file://` URI, JSON 이스케이프, 하위 경로(`/a/abc/sub`) 모두 올바르게 처리됩니다.
@@ -137,6 +146,7 @@ movara undo --id 20260903-131427-644777
 - 마이그레이션마다 먼저 전체 백업: 변경된 파일과 SQLite 데이터베이스는(`wal_checkpoint` 수행 후) 복사되고, 이름 변경은 저널에 기록되며, `undo`가 전부 복원합니다. `movara`가 옮긴 디렉터리도 함께 복원됩니다.
 - 대상이 존재하면 이름 변경을 건너뛰고 목록으로 보여 줍니다. `--from /`은 거부됩니다.
 - 마이그레이션 대상 에이전트는 먼저 종료하세요(WAL 데이터베이스는 경고하지만 손상시키지는 않습니다).
+
 
 ## 지원 에이전트
 

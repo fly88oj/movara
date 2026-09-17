@@ -32,3 +32,12 @@ directories, SQLite databases, protobuf blobs). The mitigations are:
   never `auth*`/`credential*`/`token*` files).
 
 If you find a way around any of these, please report it privately.
+
+## Archives (export / import)
+
+Exports apply a structural exclusion layer: auth/credential/token
+files, shell snapshots and secret-carrying configs never leave the
+machine, and dual-purpose configs ship as path-keyed projections
+only. No rule, however, can see inside conversation transcripts —
+anything pasted into a chat may be in an archive. Treat every archive
+as sensitive; move it over trusted channels only.

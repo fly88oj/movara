@@ -44,6 +44,22 @@ pub const JSON_LIST_FIELD_KEYS: &[&str] = &[
     "workspace_folders",
 ];
 
+/// keep only the identity-ish top-level fields of a JSON value (archive
+/// projection for dual-purpose configs); None when the value is not an
+/// object
+pub fn project_identity_fields(v: &Value) -> Option<Value> {
+    let map = v.as_object()?;
+    let mut kept = serde_json::Map::new();
+    for (k, val) in map {
+        let keep = (val.is_string() && JSON_FIELD_KEYS.contains(&k.as_str()))
+            || (val.is_array() && JSON_LIST_FIELD_KEYS.contains(&k.as_str()));
+        if keep {
+            kept.insert(k.clone(), val.clone());
+        }
+    }
+    Some(Value::Object(kept))
+}
+
 pub fn rewrite_json_value(v: &mut Value, spec: &ReplaceSpec) {
     match v {
         Value::Object(map) => {
@@ -205,7 +221,7 @@ pub fn rewrite_text_file(path: &Path, spec: &ReplaceSpec, backup: &mut Backup) -
     Ok(true)
 }
 
-fn write_atomic(path: &Path, data: &[u8]) -> Result<()> {
+pub(crate) fn write_atomic(path: &Path, data: &[u8]) -> Result<()> {
     let tmp = path.with_extension(format!(
         "{}.movara-tmp",
         path.extension()

@@ -40,7 +40,7 @@ fn mk(agent: &str, kind: &str, target: &Path, detail: &str) -> Finding {
     }
 }
 
-const SKIP_DIRS: &[&str] = &[
+pub(crate) const SKIP_DIRS: &[&str] = &[
     "node_modules",
     ".git",
     "cache",

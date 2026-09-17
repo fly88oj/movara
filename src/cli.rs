@@ -86,6 +86,48 @@ pub enum Cmd {
         #[arg(long)]
         backup_dir: Option<PathBuf>,
     },
+    /// export agent state to a portable archive
+    Export {
+        /// archive path (default movara-export-<timestamp>.tar.gz)
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// only state referencing this project path (repeatable)
+        #[arg(long = "path")]
+        paths: Vec<PathBuf>,
+        /// comma list of agents (default: all installed)
+        #[arg(long)]
+        agents: Option<String>,
+        /// JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// import an archive, optionally rebasing paths
+    Import {
+        archive: PathBuf,
+        /// path mapping OLD:NEW (repeatable)
+        #[arg(long = "rebase")]
+        rebase: Vec<String>,
+        /// comma list of agents to import (default: all in the archive)
+        #[arg(long)]
+        agents: Option<String>,
+        /// conflict policy for existing local state (skip | replace)
+        #[arg(long = "on-conflict", default_value = "skip")]
+        on_conflict: String,
+        /// proceed even when archive paths resolve to nothing locally
+        #[arg(long = "allow-missing-path", default_value_t = false)]
+        allow_missing_path: bool,
+        /// report only
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        /// skip confirmation
+        #[arg(long)]
+        yes: bool,
+        #[arg(long)]
+        backup_dir: Option<PathBuf>,
+        /// JSON output
+        #[arg(long)]
+        json: bool,
+    },
     /// revert a migration
     Undo {
         #[arg(long = "id")]
@@ -122,6 +164,34 @@ pub fn run() -> Result<()> {
     match &cli.cmd {
         Cmd::Agents { json } => cmd_agents(&ctx, *json),
         Cmd::Scan { common, frm, to } => cmd_scan(&ctx, common, frm, to.as_deref()),
+        Cmd::Export {
+            out,
+            paths,
+            agents,
+            json,
+        } => cmd_export(&ctx, out.as_deref(), paths, agents.as_deref(), *json),
+        Cmd::Import {
+            archive,
+            rebase,
+            agents,
+            on_conflict,
+            allow_missing_path,
+            dry_run,
+            yes,
+            backup_dir,
+            json,
+        } => cmd_import(
+            &ctx,
+            archive,
+            rebase,
+            agents.as_deref(),
+            on_conflict,
+            *allow_missing_path,
+            *dry_run,
+            *yes,
+            backup_dir.clone(),
+            *json,
+        ),
         Cmd::Migrate {
             common,
             frm,
@@ -193,6 +263,148 @@ fn adapters_for(common: &CommonArgs) -> Result<Vec<Box<dyn Adapter>>> {
         }));
     }
     Ok(list)
+}
+
+fn cmd_export(
+    ctx: &Ctx,
+    out: Option<&Path>,
+    paths: &[PathBuf],
+    agents: Option<&str>,
+    json: bool,
+) -> Result<()> {
+    let out = out.map(|p| p.to_path_buf()).unwrap_or_else(|| {
+        PathBuf::from(format!(
+            "movara-export-{}.tar.gz",
+            chrono::Local::now().format("%Y%m%d-%H%M%S-%6f")
+        ))
+    });
+    let names: Option<Vec<String>> =
+        agents.map(|a| a.split(',').map(|s| s.trim().to_string()).collect());
+    let sel: Vec<String> = paths
+        .iter()
+        .map(|p| crate::ctx::path_str(&crate::spec::absolutish(p)))
+        .collect();
+    let list = adapters::get_adapters(names.as_deref())?;
+    let opts = crate::archive::ExportOpts {
+        out,
+        filtered: names.is_some() || !sel.is_empty(),
+        paths: sel,
+    };
+    let report = crate::archive::run_export(ctx, &list, &opts)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    println!("{}", t!("export.done", path = report.archive.as_str()));
+    println!(
+        "{}",
+        t!(
+            "export.summary",
+            agents = report.agents.len(),
+            files = report.files,
+            databases = report.databases,
+            bytes = report.bytes,
+            excluded = report.excluded
+        )
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cmd_import(
+    ctx: &Ctx,
+    archive: &Path,
+    rebase: &[String],
+    agents: Option<&str>,
+    on_conflict: &str,
+    allow_missing: bool,
+    dry_run: bool,
+    yes: bool,
+    backup_dir: Option<PathBuf>,
+    json: bool,
+) -> Result<()> {
+    let policy = match on_conflict {
+        "skip" => crate::archive::Policy::Skip,
+        "replace" => crate::archive::Policy::Replace,
+        other => bail!("{}", t!("import.err_policy", policy = other)),
+    };
+    let rules = crate::spec::prepare_rules(rebase)?;
+    let names: Option<Vec<String>> =
+        agents.map(|a| a.split(',').map(|s| s.trim().to_string()).collect());
+    let list = adapters::get_adapters(names.as_deref())?;
+    let staging = crate::archive::open(archive)?;
+    let missing = crate::archive::verify_paths(&staging.manifest.paths, &rules);
+    if !missing.is_empty() {
+        println!("{}", t!("import.missing_paths", count = missing.len()));
+        for p in missing.iter().take(10) {
+            println!("  {}", p);
+        }
+        if !allow_missing && !yes {
+            println!("{}", t!("common.aborted"));
+            return Ok(());
+        }
+    }
+    if !yes && !dry_run {
+        print!(
+            "{}",
+            t!(
+                "import.confirm",
+                archive = archive.display().to_string().as_str(),
+                agents = staging.manifest.agents.len()
+            )
+        );
+        let _ = std::io::stdout().flush();
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !ans.trim().eq_ignore_ascii_case("y") && !ans.trim().eq_ignore_ascii_case("yes") {
+            println!("{}", t!("common.aborted"));
+            return Ok(());
+        }
+    }
+    let bdir = backup_dir.unwrap_or_else(|| ctx.default_backup_dir());
+    let spec = match rules.first() {
+        Some((o, n)) => ReplaceSpec::new(o, n)?,
+        None => ReplaceSpec::identity(),
+    };
+    let journal_agents = staging.manifest.agents.clone();
+    let mut backup = backup::Backup::new(&bdir, &spec, journal_agents, dry_run);
+    let opts = crate::archive::ImportOpts {
+        rules: rules.clone(),
+        agents: names.clone(),
+        policy,
+        allow_missing,
+        dry_run,
+    };
+    // save the journal even when the import fails midway: everything
+    // written so far must stay reversible
+    let report = match crate::archive::run_import(ctx, &staging, &list, &opts, &mut backup) {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = backup.save();
+            return Err(e);
+        }
+    };
+    backup.save()?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    println!(
+        "{}",
+        t!(
+            "import.summary",
+            placed = report.placed + report.merged,
+            replaced = report.replaced,
+            skipped = report.skipped,
+            changes = report.changes
+        )
+    );
+    if dry_run {
+        println!("{}", t!("mv.dry_run"));
+    } else {
+        println!("{}: movara undo --id {}", t!("mv.undo"), backup.manifest.id);
+    }
+    Ok(())
 }
 
 fn cmd_agents(ctx: &Ctx, json: bool) -> Result<()> {

@@ -96,6 +96,8 @@ Comportement de `movara mv` : scanner et montrer quel état d'agent référence 
 | `movara undo --id <ID>` | annule entièrement une migration (voir ci-dessous) |
 | `movara backups` | liste les journaux de migration (voir ci-dessous) |
 | `movara agents` | liste les agents pris en charge et leur état d'installation |
+| `movara export [--path CHEMIN]... [--agents LISTE]` | écrit une archive `.tar.gz` portable de l'état — tout l'hôte, ou filtrée par chemin de projet / agents |
+| `movara import <ARCHIVE> [--rebase OLD:NEW]...` | restaure une archive sur cet hôte en rebasant les chemins ; journalisée comme une migration, donc `movara undo` l'annule |
 
 ### Options
 
@@ -110,6 +112,11 @@ Comportement de `movara mv` : scanner et montrer quel état d'agent référence 
 | `--yes` | migrate, mv | passer l'invite de confirmation |
 | `--move-project` | migrate | déplacer d'abord le répertoire du projet |
 | `--json` | agents, scan, migrate, mv, backups | émettre un unique document JSON sur stdout (exploitable par machine) |
+| `--out FILE` | export | chemin de l'archive (par défaut `movara-export-<horodatage>.tar.gz`) |
+| `--path CHEMIN` | export | uniquement l'état référençant ce chemin de projet (répétable ; intersection avec `--agents`) |
+| `--rebase OLD:NEW` | import | mapping de chemins, répétable ; les règles qui se chevauchent ou s'enchaînent sont refusées |
+| `--on-conflict POLICY` | import | `skip` (défaut) ou `replace` l'état local existant |
+| `--allow-missing-path` | import | continuer quand les chemins de l'archive n'existent pas localement |
 
 ### Annulation et sauvegardes
 
@@ -132,6 +139,8 @@ renommages incluant le répertoire déplacé.
   migration, pas un seul agent ou fichier, et doit précéder toute nouvelle
   migration des mêmes chemins.
 
+Les échanges via `export` / `import` sont journalisés de la même façon : `undo` annule totalement une importation, y compris l'état qu'elle a créé.
+
 ## Sécurité
 
 - **Remplacement conscient des frontières** : `/a/abc` ne correspond jamais à `/a/abc2` ni à `/a/abc-def` ; les URI `file://`, l'échappement JSON et les sous-chemins (`/a/abc/sub`) sont gérés.
@@ -139,6 +148,7 @@ renommages incluant le répertoire déplacé.
 - Sauvegarde complète avant chaque migration : les fichiers modifiés et les bases SQLite sont copiés (après un `wal_checkpoint`), les renommages sont journalisés, et `undo` restaure tout ; les déplacements de répertoires effectués par `movara` sont également annulés.
 - Les renommages sont ignorés quand la cible existe ; `--from /` est refusé.
 - Fermez les agents concernés avant la migration (les bases WAL reçoivent un avertissement mais ne sont pas corrompues).
+
 
 ## Agents pris en charge
 

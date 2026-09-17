@@ -114,6 +114,8 @@ src == dst は拒否します。
 | `movara undo --id <ID>` | 1 回の移行を完全に巻き戻す（下記） |
 | `movara backups` | 移行ジャーナルの一覧（下記） |
 | `movara agents` | 対応エージェントとインストール状態の一覧 |
+| `movara export [--path PATH]... [--agents LIST]` | エージェント状態を可搬な `.tar.gz` に書き出す。ホスト全体、またはパス/エージェントで絞り込み |
+| `movara import <ARCHIVE> [--rebase OLD:NEW]...` | アーカイブをこのホストに復元しパスをリベース。移行と同じくジャーナル化され `movara undo` で完全に取り消せます |
 
 ### オプション
 
@@ -128,6 +130,11 @@ src == dst は拒否します。
 | `--yes` | migrate, mv | 確認プロンプトをスキップ |
 | `--move-project` | migrate | 再キーイングの前にプロジェクトディレクトリ自体を移動 |
 | `--json` | agents, scan, migrate, mv, backups | stdout に単一の JSON ドキュメントを出力 |
+| `--out FILE` | export | アーカイブパス（デフォルト `movara-export-<タイムスタンプ>.tar.gz`） |
+| `--path PATH` | export | このプロジェクトパスを参照する状態のみ（繰り返し可。`--agents` との積） |
+| `--rebase OLD:NEW` | import | パスマッピング。繰り返し可。重複・連鎖ルールは拒否されます |
+| `--on-conflict POLICY` | import | 既存ローカル状態への `skip`（デフォルト）または `replace` |
+| `--allow-missing-path` | import | アーカイブパスがローカルに存在しなくても続行 |
 
 ### undo とバックアップ
 
@@ -149,6 +156,8 @@ src == dst は拒否します。
   ファイルだけを戻すことはできません。同じパスを再移行する前に実行して
   ください。
 
+`export` / `import` も同様にジャーナル化されます。`undo` は作成された状態も含めてインポートを完全に巻き戻します。
+
 ## 安全性
 
 - **境界を考慮した置換**：`/a/abc` は `/a/abc2` や `/a/abc-def` には
@@ -160,6 +169,7 @@ src == dst は拒否します。
 - 移動先が存在する場合はスキップ。`--from /` は拒否。
 - 移行対象のエージェントは事前に終了してください（WAL データベースは
   警告しますが破損はしません）。
+
 
 ## 対応エージェント
 

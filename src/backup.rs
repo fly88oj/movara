@@ -25,6 +25,13 @@ pub struct Manifest {
     pub renames: Vec<(String, String)>,
     #[serde(default)]
     pub moved_project: Option<(String, String)>,
+    /// rebase rules an import applied (empty for plain migrations)
+    #[serde(default)]
+    pub rules: Vec<(String, String)>,
+    /// paths the change CREATED (absent before); undo removes them and
+    /// prunes directories that only exist because of the change
+    #[serde(default)]
+    pub created_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,6 +76,8 @@ impl Backup {
                 dbs: Vec::new(),
                 renames: Vec::new(),
                 moved_project: None,
+                rules: Vec::new(),
+                created_paths: Vec::new(),
             },
             dry_run,
             dbs_done: std::collections::HashSet::new(),
@@ -137,6 +146,19 @@ impl Backup {
             crate::ctx::path_str(&absolute(old)),
             crate::ctx::path_str(&absolute(new)),
         ));
+    }
+
+    /// Journal a path this change creates (file, database or directory);
+    /// undo deletes it again and prunes parent directories the change
+    /// left behind. Call BEFORE creating the path.
+    pub fn record_created(&mut self, path: &Path) {
+        if self.dry_run {
+            return;
+        }
+        let p = crate::ctx::path_str(&absolute(path));
+        if !self.manifest.created_paths.contains(&p) {
+            self.manifest.created_paths.push(p);
+        }
     }
 
     pub fn save(&self) -> Result<()> {
@@ -303,6 +325,52 @@ pub fn undo(backup_dir: &Path, backup_id: &str) -> Result<bool> {
                         "backup.err_reverse",
                         new = new.display().to_string().as_str(),
                         old = old.display().to_string().as_str(),
+                        error = e.to_string().as_str()
+                    )
+                );
+                ok = false;
+            }
+        }
+    }
+
+    // 5. remove paths the change created (files and databases first,
+    //    then directories deepest-first, pruning only empties) — this is
+    //    what makes `undo` reverse an import completely
+    let mut created_dirs: Vec<PathBuf> = Vec::new();
+    for p in &manifest.created_paths {
+        if p.contains("..") {
+            continue;
+        }
+        let path = PathBuf::from(p);
+        if !path.exists() {
+            continue;
+        }
+        if path.is_dir() {
+            created_dirs.push(path);
+        } else if let Err(e) = fs::remove_file(&path) {
+            eprintln!(
+                "{}",
+                t!(
+                    "backup.err_remove_created",
+                    path = p.as_str(),
+                    error = e.to_string().as_str()
+                )
+            );
+            ok = false;
+        }
+    }
+    created_dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+    for d in created_dirs {
+        if d.read_dir()
+            .map(|mut it| it.next().is_none())
+            .unwrap_or(false)
+        {
+            if let Err(e) = fs::remove_dir(&d) {
+                eprintln!(
+                    "{}",
+                    t!(
+                        "backup.err_remove_created",
+                        path = d.display().to_string().as_str(),
                         error = e.to_string().as_str()
                     )
                 );
