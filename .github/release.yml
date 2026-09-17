@@ -1,0 +1,19 @@
+# Release notes config: hide routine CI/build commits from auto-notes.
+# Docs: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+changelog:
+  exclude:
+    labels: []
+    authors:
+      - github-actions
+  categories:
+    - title: New features
+      labels:
+        - feat
+        - enhancement
+    - title: Bug fixes
+      labels:
+        - fix
+        - bug
+    - title: Other changes
+      labels:
+        - "*"
