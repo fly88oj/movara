@@ -15,24 +15,24 @@ AI 코딩 에이전트의 워크스페이스 상태를 휴대 가능하게.
 
 ## 설치
 
-Rust로 구현되어 런타임 의존성이 없으며 Linux / macOS / Windows에서 동작합니다. 모든 [릴리스](https://github.com/fly88oj/movara/releases)에 빌드된 패키지가 첨부됩니다. 아래 파일명은 `1.0.0` 기준 예시이므로 실제 내려받은 버전으로 바꿔 주세요.
+Rust로 구현되어 런타임 의존성이 없으며 Linux / macOS / Windows에서 동작합니다. 모든 [릴리스](https://github.com/fly88oj/movara/releases)에 빌드된 패키지가 첨부됩니다. 아래 파일명은 `1.1.0` 기준 예시이므로 실제 내려받은 버전으로 바꿔 주세요.
 
 **Debian / Ubuntu (.deb)**
 
 ```bash
-sudo dpkg -i movara_1.0.0-1_amd64.deb
+sudo dpkg -i movara_1.1.0-1_amd64.deb
 ```
 
 **Fedora / RHEL (.rpm)**
 
 ```bash
-sudo dnf install movara-1.0.0-1.x86_64.rpm
+sudo dnf install movara-1.1.0-1.x86_64.rpm
 ```
 
 **기타 Linux (tar.gz)**
 
 ```bash
-tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf movara-1.1.0-x86_64-unknown-linux-gnu.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -40,7 +40,7 @@ sudo cp movara /usr/local/bin/
 
 ```bash
 # dmg를 열어 bin/movara를 /usr/local/bin에 복사하거나:
-tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+tar xzf movara-1.1.0-aarch64-apple-darwin.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -48,7 +48,7 @@ Intel Mac은 Rosetta 2로 arm64 빌드를 실행하거나 소스에서 빌드하
 
 **Windows (zip)**
 
-`movara-1.0.0-x86_64-pc-windows-msvc.zip`의 압축을 풀고 `movara.exe`가
+`movara-1.1.0-x86_64-pc-windows-msvc.zip`의 압축을 풀고 `movara.exe`가
 있는 폴더를 `PATH`에 추가하세요.
 
 **소스에서 설치**
