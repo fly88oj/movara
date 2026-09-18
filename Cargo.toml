@@ -1,6 +1,6 @@
 [package]
 name = "movara"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Move a project directory and rewrite every AI coding agent's local session/config references to it, with backup and undo"

@@ -26,25 +26,25 @@ completo.
 Implementación en Rust, sin dependencias en tiempo de ejecución,
 disponible en Linux / macOS / Windows. Cada
 [release](https://github.com/fly88oj/movara/releases) incluye paquetes
-precompilados; los nombres de archivo siguientes usan `1.0.0`, sustitúyelo
+precompilados; los nombres de archivo siguientes usan `1.1.0`, sustitúyelo
 por la versión que descargues.
 
 **Debian / Ubuntu (.deb)**
 
 ```bash
-sudo dpkg -i movara_1.0.0-1_amd64.deb
+sudo dpkg -i movara_1.1.0-1_amd64.deb
 ```
 
 **Fedora / RHEL (.rpm)**
 
 ```bash
-sudo dnf install movara-1.0.0-1.x86_64.rpm
+sudo dnf install movara-1.1.0-1.x86_64.rpm
 ```
 
 **Otras distribuciones Linux (tar.gz)**
 
 ```bash
-tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf movara-1.1.0-x86_64-unknown-linux-gnu.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -52,7 +52,7 @@ sudo cp movara /usr/local/bin/
 
 ```bash
 # abre el dmg y copia bin/movara a /usr/local/bin, o:
-tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+tar xzf movara-1.1.0-aarch64-apple-darwin.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -61,7 +61,7 @@ el código fuente.
 
 **Windows (zip)**
 
-Extrae `movara-1.0.0-x86_64-pc-windows-msvc.zip` y pon `movara.exe` en tu
+Extrae `movara-1.1.0-x86_64-pc-windows-msvc.zip` y pon `movara.exe` en tu
 `PATH`.
 
 **Desde el código fuente**

@@ -21,24 +21,24 @@ Cursor、Windsurf……）把会话记录按**项目路径**做键：目录名�
 
 Rust 实现，无运行时依赖，支持 Linux / macOS / Windows。每个
 [Release](https://github.com/fly88oj/movara/releases) 都附带预编译包——
-以下文件名以 `1.0.0` 为例，请替换为实际下载的版本号。
+以下文件名以 `1.1.0` 为例，请替换为实际下载的版本号。
 
 **Debian / Ubuntu（.deb）**
 
 ```bash
-sudo dpkg -i movara_1.0.0-1_amd64.deb
+sudo dpkg -i movara_1.1.0-1_amd64.deb
 ```
 
 **Fedora / RHEL（.rpm）**
 
 ```bash
-sudo dnf install movara-1.0.0-1.x86_64.rpm
+sudo dnf install movara-1.1.0-1.x86_64.rpm
 ```
 
 **其他 Linux 发行版（tar.gz）**
 
 ```bash
-tar xzf movara-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf movara-1.1.0-x86_64-unknown-linux-gnu.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -46,7 +46,7 @@ sudo cp movara /usr/local/bin/
 
 ```bash
 # 打开 dmg 把 bin/movara 拷到 /usr/local/bin，或：
-tar xzf movara-1.0.0-aarch64-apple-darwin.tar.gz
+tar xzf movara-1.1.0-aarch64-apple-darwin.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -54,7 +54,7 @@ Intel Mac 通过 Rosetta 2 运行 arm64 版本，或从源码构建。
 
 **Windows（zip）**
 
-解压 `movara-1.0.0-x86_64-pc-windows-msvc.zip`，把 `movara.exe` 所在
+解压 `movara-1.1.0-x86_64-pc-windows-msvc.zip`，把 `movara.exe` 所在
 目录加入 `PATH`。
 
 **从源码安装**
