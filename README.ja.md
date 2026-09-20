@@ -25,25 +25,25 @@ JSONL・SQLite・protobuf ファイルの中にあります。ディレクトリ
 
 Rust 実装。実行時依存なし、Linux / macOS / Windows に対応。各
 [Release](https://github.com/fly88oj/movara/releases) にビルド済み
-パッケージが同梱されます。以下のファイル名は `1.1.0` の例なので、
+パッケージが同梱されます。以下のファイル名は `1.2.0` の例なので、
 ダウンロードしたバージョンに置き換えてください。
 
 **Debian / Ubuntu（.deb）**
 
 ```bash
-sudo dpkg -i movara_1.1.0-1_amd64.deb
+sudo dpkg -i movara_1.2.0-1_amd64.deb
 ```
 
 **Fedora / RHEL（.rpm）**
 
 ```bash
-sudo dnf install movara-1.1.0-1.x86_64.rpm
+sudo dnf install movara-1.2.0-1.x86_64.rpm
 ```
 
 **その他の Linux（tar.gz）**
 
 ```bash
-tar xzf movara-1.1.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf movara-1.2.0-x86_64-unknown-linux-gnu.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -51,7 +51,7 @@ sudo cp movara /usr/local/bin/
 
 ```bash
 # dmg を開いて bin/movara を /usr/local/bin にコピー、または：
-tar xzf movara-1.1.0-aarch64-apple-darwin.tar.gz
+tar xzf movara-1.2.0-aarch64-apple-darwin.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -60,7 +60,7 @@ Intel Mac は Rosetta 2 経由で arm64 ビルドを実行するか、ソース�
 
 **Windows（zip）**
 
-`movara-1.1.0-x86_64-pc-windows-msvc.zip` を展開し、`movara.exe` の
+`movara-1.2.0-x86_64-pc-windows-msvc.zip` を展開し、`movara.exe` の
 あるフォルダを `PATH` に追加してください。
 
 **ソースから**

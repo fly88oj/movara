@@ -24,24 +24,24 @@ re-keys all of those references to the new path in one shot, with full undo.
 Rust implementation, no runtime dependencies, runs on Linux / macOS /
 Windows. Prebuilt packages are attached to every
 [release](https://github.com/fly88oj/movara/releases) — the file names
-below use `1.1.0`; substitute the version you downloaded.
+below use `1.2.0`; substitute the version you downloaded.
 
 **Debian / Ubuntu (.deb)**
 
 ```bash
-sudo dpkg -i movara_1.1.0-1_amd64.deb
+sudo dpkg -i movara_1.2.0-1_amd64.deb
 ```
 
 **Fedora / RHEL (.rpm)**
 
 ```bash
-sudo dnf install movara-1.1.0-1.x86_64.rpm
+sudo dnf install movara-1.2.0-1.x86_64.rpm
 ```
 
 **Other Linux (tar.gz)**
 
 ```bash
-tar xzf movara-1.1.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf movara-1.2.0-x86_64-unknown-linux-gnu.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -49,7 +49,7 @@ sudo cp movara /usr/local/bin/
 
 ```bash
 # open the dmg and copy bin/movara to /usr/local/bin, or:
-tar xzf movara-1.1.0-aarch64-apple-darwin.tar.gz
+tar xzf movara-1.2.0-aarch64-apple-darwin.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -57,7 +57,7 @@ Intel Macs run the arm64 build under Rosetta 2 or build from source.
 
 **Windows (zip)**
 
-Extract `movara-1.1.0-x86_64-pc-windows-msvc.zip` and put `movara.exe`
+Extract `movara-1.2.0-x86_64-pc-windows-msvc.zip` and put `movara.exe`
 on your `PATH`.
 
 **From source**

@@ -15,24 +15,24 @@ A maioria dos agentes de programação com IA (Claude Code, Codex, a família Ge
 
 ## Instalação
 
-Implementado em Rust, sem dependências de runtime, roda em Linux / macOS / Windows. Cada [release](https://github.com/fly88oj/movara/releases) traz pacotes pré-compilados; os nomes de arquivo abaixo usam `1.1.0` — substitua pela versão que você baixou.
+Implementado em Rust, sem dependências de runtime, roda em Linux / macOS / Windows. Cada [release](https://github.com/fly88oj/movara/releases) traz pacotes pré-compilados; os nomes de arquivo abaixo usam `1.2.0` — substitua pela versão que você baixou.
 
 **Debian / Ubuntu (.deb)**
 
 ```bash
-sudo dpkg -i movara_1.1.0-1_amd64.deb
+sudo dpkg -i movara_1.2.0-1_amd64.deb
 ```
 
 **Fedora / RHEL (.rpm)**
 
 ```bash
-sudo dnf install movara-1.1.0-1.x86_64.rpm
+sudo dnf install movara-1.2.0-1.x86_64.rpm
 ```
 
 **Outras distribuições Linux (tar.gz)**
 
 ```bash
-tar xzf movara-1.1.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf movara-1.2.0-x86_64-unknown-linux-gnu.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -40,7 +40,7 @@ sudo cp movara /usr/local/bin/
 
 ```bash
 # abra o dmg e copie bin/movara para /usr/local/bin, ou:
-tar xzf movara-1.1.0-aarch64-apple-darwin.tar.gz
+tar xzf movara-1.2.0-aarch64-apple-darwin.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -48,7 +48,7 @@ Macs Intel executam a build arm64 via Rosetta 2 ou compilam do código-fonte.
 
 **Windows (zip)**
 
-Extraia `movara-1.1.0-x86_64-pc-windows-msvc.zip` e coloque `movara.exe`
+Extraia `movara-1.2.0-x86_64-pc-windows-msvc.zip` e coloque `movara.exe`
 no seu `PATH`.
 
 **Do código-fonte**

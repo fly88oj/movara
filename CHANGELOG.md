@@ -8,7 +8,7 @@ List items must each be a single source line (no hard wrapping): the
 release workflow extracts this file verbatim as the GitHub Release body,
 and the release page renders every newline as a forced break.
 
-## [Unreleased]
+## [1.2.0] - 2026-09-20
 
 ### Added
 

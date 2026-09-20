@@ -15,24 +15,24 @@ Die meisten KI-Coding-Agenten (Claude Code, Codex, die Gemini-CLI-Familie, OpenC
 
 ## Installation
 
-In Rust implementiert, keine Laufzeitabhängigkeiten, läuft auf Linux / macOS / Windows. Jedes [Release](https://github.com/fly88oj/movara/releases) enthält vorgebaute Pakete; die Dateinamen unten verwenden `1.1.0` — ersetzen Sie sie durch die heruntergeladene Version.
+In Rust implementiert, keine Laufzeitabhängigkeiten, läuft auf Linux / macOS / Windows. Jedes [Release](https://github.com/fly88oj/movara/releases) enthält vorgebaute Pakete; die Dateinamen unten verwenden `1.2.0` — ersetzen Sie sie durch die heruntergeladene Version.
 
 **Debian / Ubuntu (.deb)**
 
 ```bash
-sudo dpkg -i movara_1.1.0-1_amd64.deb
+sudo dpkg -i movara_1.2.0-1_amd64.deb
 ```
 
 **Fedora / RHEL (.rpm)**
 
 ```bash
-sudo dnf install movara-1.1.0-1.x86_64.rpm
+sudo dnf install movara-1.2.0-1.x86_64.rpm
 ```
 
 **Andere Linux-Distributionen (tar.gz)**
 
 ```bash
-tar xzf movara-1.1.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf movara-1.2.0-x86_64-unknown-linux-gnu.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -40,7 +40,7 @@ sudo cp movara /usr/local/bin/
 
 ```bash
 # dmg öffnen und bin/movara nach /usr/local/bin kopieren, oder:
-tar xzf movara-1.1.0-aarch64-apple-darwin.tar.gz
+tar xzf movara-1.2.0-aarch64-apple-darwin.tar.gz
 sudo cp movara /usr/local/bin/
 ```
 
@@ -49,7 +49,7 @@ Quellcode.
 
 **Windows (zip)**
 
-`movara-1.1.0-x86_64-pc-windows-msvc.zip` entpacken und `movara.exe` in
+`movara-1.2.0-x86_64-pc-windows-msvc.zip` entpacken und `movara.exe` in
 den `PATH` legen.
 
 **Aus dem Quellcode**
