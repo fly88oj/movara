@@ -225,3 +225,34 @@ local data. A Chinese version is available at `docs/research.zh-CN.md`.
 - Copilot: docs.github.com copilot-cli chronicle / overview;
   jonmagic.com posts
 - Amp: ampcode.com/security; docs.rs/ampcode
+
+## Memory inventory (v1.2 move carriage)
+
+Project-scoped memory rides a `movara move` through two mechanisms:
+home-side stores keyed by an encoding of the project path (selected via
+their directory keys — the prose inside carries no path string), and
+in-project memory files (carried with the project tree, or via the
+`project-memory/` manifest on `--state-only`).
+
+| agent | project memory | keyed by | selected via | global memory (roadmap) |
+|---|---|---|---|---|
+| claude | `~/.claude/projects/<dash>/` (all per-project data) | dash(cwd) | dir key | `~/.claude/CLAUDE.md` |
+| codex | `AGENTS.md` in project | file in project | project tree | `~/.codex/AGENTS.md` |
+| gemini | `GEMINI.md` in project | file in project | project tree | `~/.gemini/GEMINI.md` |
+| qwen / iflow | same family as gemini | file in project | project tree | user-level md |
+| opencode | storage db rows + memory under `~/.local/share/opencode/` | db | content match | global memory dir |
+| omp / pi | `~{.pi,.omp}/agent/projects-memory/<basename>/` | basename | dir key (depth ≤ 2) | — |
+| zcode | `~/.zcode/cli/memories/projects/<basename>-<sha256[:16]>/` | memory key | dir key (any depth) | — |
+| cursor | `.cursor/rules/` in project | dir in project | project tree | global rules store |
+| windsurf | `.windsurf/rules/` in project | dir in project | project tree | `~/.codeium/windsurf/memories` |
+| antigravity | rules in project | dir in project | project tree | — |
+| crush | `<project>/.crush/` | in project | rides the user's own project move | global `projects.json` |
+| droid | `AGENTS.md` in project | file in project | project tree | — |
+| continue | config + index | db | content match | — |
+| aider | `CONVENTIONS.md` in project | file in project | project tree | chat history |
+| zed | thread data | db | content match | — |
+| cc-connect | none | — | — | — |
+
+Global memory deliberately does NOT move in v1.2: both hosts almost
+always have their own, so carriage is a merge problem that waits for
+the additive/merge machinery.

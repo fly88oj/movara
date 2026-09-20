@@ -97,6 +97,8 @@ Comportamento do `movara mv`: escanear e mostrar qual estado de agente referenci
 | `movara agents` | lista os agentes suportados e o status de instalação |
 | `movara export [--path CAMINHO]... [--agents LISTA]` | grava um arquivo `.tar.gz` portátil do estado — o host inteiro, ou filtrado por caminho de projeto / agentes |
 | `movara import <ARQUIVO> [--rebase OLD:NEW]...` | restaura um arquivo neste host remapeando caminhos; registrado como uma migração, então `movara undo` o reverte |
+| `movara move <SRC> [usuário@]host:<DST>` | move um projeto E o estado dos agentes para outro host via ssh em um comando — a memória viaja, limpeza opcional (sem literais IPv6) |
+| `movara receive --dst <DST>` | [lado destino] importa o arquivo em fluxo do stdin (disparado por `move`) |
 
 ### Opções
 
@@ -114,8 +116,13 @@ Comportamento do `movara mv`: escanear e mostrar qual estado de agente referenci
 | `--out FILE` | export | caminho do arquivo (padrão `movara-export-<timestamp>.tar.gz`) |
 | `--path CAMINHO` | export | apenas o estado que referencia este caminho de projeto (repetível; interseção com `--agents`) |
 | `--rebase OLD:NEW` | import | mapeamento de caminhos, repetível; regras sobrepostas ou encadeadas são recusadas |
+| `--dst <DST>` | receive | diretório de destino do projeto neste host |
+| `--plan-only` | receive | verificar o destino e sair |
+| `--yes` | receive | não interativo (obrigatório em streaming) |
 | `--on-conflict POLICY` | import | `skip` (padrão) ou `replace` o estado local existente |
 | `--allow-missing-path` | import | prosseguir quando caminhos do arquivo não existirem localmente |
+| `--state-only` | move | levar apenas estado + memória do projeto, não o código |
+| `--cleanup` | move | remover o conjunto migrado neste host após sucesso verificado (bancos/configs compartilhados ficam) |
 
 ### Desfazer e backups
 
@@ -139,6 +146,7 @@ que inclui o diretório movido.
   uma nova migração dos mesmos caminhos.
 
 Trocas via `export` / `import` são registradas da mesma forma: `undo` reverte uma importação por completo, incluindo o estado que ela criou.
+Um `move` entre hosts adiciona a árvore do projeto (com `.git`) à troca: `--state-only` descarta o código mas mantém os arquivos de memória do projeto (CLAUDE.md, AGENTS.md, rules); `--cleanup` apaga apenas o conjunto migrado na origem — nunca bancos ou configs compartilhados — e é reversível.
 
 ## Segurança
 

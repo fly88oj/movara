@@ -98,6 +98,8 @@ Comportement de `movara mv` : scanner et montrer quel état d'agent référence 
 | `movara agents` | liste les agents pris en charge et leur état d'installation |
 | `movara export [--path CHEMIN]... [--agents LISTE]` | écrit une archive `.tar.gz` portable de l'état — tout l'hôte, ou filtrée par chemin de projet / agents |
 | `movara import <ARCHIVE> [--rebase OLD:NEW]...` | restaure une archive sur cet hôte en rebasant les chemins ; journalisée comme une migration, donc `movara undo` l'annule |
+| `movara move <SRC> [utilisateur@]hôte:<DST>` | déplace un projet ET l'état de ses agents vers un autre hôte via ssh en une commande — la mémoire voyage, nettoyage optionnel (pas de littéraux IPv6) |
+| `movara receive --dst <DST>` | [côté cible] importe l'archive en flux depuis stdin (lancé par `move`) |
 
 ### Options
 
@@ -115,8 +117,13 @@ Comportement de `movara mv` : scanner et montrer quel état d'agent référence 
 | `--out FILE` | export | chemin de l'archive (par défaut `movara-export-<horodatage>.tar.gz`) |
 | `--path CHEMIN` | export | uniquement l'état référençant ce chemin de projet (répétable ; intersection avec `--agents`) |
 | `--rebase OLD:NEW` | import | mapping de chemins, répétable ; les règles qui se chevauchent ou s'enchaînent sont refusées |
+| `--dst <DST>` | receive | répertoire de destination du projet sur cet hôte |
+| `--plan-only` | receive | vérifier la destination puis sortir |
+| `--yes` | receive | non interactif (requis en flux) |
 | `--on-conflict POLICY` | import | `skip` (défaut) ou `replace` l'état local existant |
 | `--allow-missing-path` | import | continuer quand les chemins de l'archive n'existent pas localement |
+| `--state-only` | move | emporter uniquement l'état + la mémoire du projet, pas le code |
+| `--cleanup` | move | supprimer l'ensemble migré sur cet hôte après succès vérifié (les bases/configs partagées restent) |
 
 ### Annulation et sauvegardes
 
@@ -140,6 +147,7 @@ renommages incluant le répertoire déplacé.
   migration des mêmes chemins.
 
 Les échanges via `export` / `import` sont journalisés de la même façon : `undo` annule totalement une importation, y compris l'état qu'elle a créé.
+Un `move` inter-hôtes ajoute l'arborescence du projet (avec `.git`) à l'échange : `--state-only` laisse le code mais conserve les fichiers de mémoire du projet (CLAUDE.md, AGENTS.md, rules) ; `--cleanup` ne supprime que l'ensemble migré côté source — jamais les bases ou configs partagées — et reste réversible.
 
 ## Sécurité
 

@@ -97,6 +97,8 @@ movara undo --id 20260903-131427-644777
 | `movara agents` | 지원 에이전트와 설치 여부 목록 |
 | `movara export [--path PATH]... [--agents LIST]` | 에이전트 상태를 휴대 가능한 `.tar.gz` 로 생성 — 호스트 전체 또는 경로/에이전트로 필터 |
 | `movara import <ARCHIVE> [--rebase OLD:NEW]...` | 아카이브를 이 호스트에 복원하고 경로를 재베이스; 마이그레이션처럼 저널에 기록되어 `movara undo` 로 완전히 되돌릴 수 있음 |
+| `movara move <SRC> [user@]host:<DST>` | ssh 로 프로젝트와 에이전트 상태를 한 번에 다른 호스트로 이동 — 기억 동반, 정리 선택적 (IPv6 호스트 리터럴 미지원) |
+| `movara receive --dst <DST>` | [수신 측] stdin 의 스트림 아카이브 가져오기 (`move` 가 실행) |
 
 ### 옵션
 
@@ -114,8 +116,13 @@ movara undo --id 20260903-131427-644777
 | `--out FILE` | export | 아카이브 경로 (기본값 `movara-export-<타임스탬프>.tar.gz`) |
 | `--path PATH` | export | 이 프로젝트 경로를 참조하는 상태만 (반복 가능; `--agents` 와 교집합) |
 | `--rebase OLD:NEW` | import | 경로 매핑, 반복 지정 가능; 중복·연쇄 규칙은 거부됨 |
+| `--dst <DST>` | receive | 이 호스트의 프로젝트 대상 디렉터리 |
+| `--plan-only` | receive | 대상 사전 점검 후 종료 |
+| `--yes` | receive | 비대화형 (스트리밍 수신 시 필수) |
 | `--on-conflict POLICY` | import | 기존 로컬 상태에 대해 `skip`(기본값) 또는 `replace` |
 | `--allow-missing-path` | import | 아카이브 경로가 로컬에 없어도 계속 |
+| `--state-only` | move | 코드 없이 에이전트 상태와 프로젝트 기억만 운반 |
+| `--cleanup` | move | 검증 성공 후 원본의 이동된 상태 세트 삭제 (공유 DB/설정은 유지) |
 
 ### 되돌리기와 백업
 
@@ -138,6 +145,7 @@ movara undo --id 20260903-131427-644777
   합니다.
 
 `export` / `import` 도 같은 방식으로 저널에 기록됩니다. `undo` 는 생성된 상태를 포함해 가져오기를 완전히 되돌립니다.
+크로스호스트 `move` 는 프로젝트 트리(`.git` 포함)도 교환합니다. `--state-only` 는 코드를 제외하되 프로젝트 내 기억 파일(CLAUDE.md, AGENTS.md, rules)은 유지하고, `--cleanup` 은 이동된 상태 세트만 삭제합니다(공유 DB 나 설정은 절대 삭제하지 않음) — 그 자체도 되돌릴 수 있습니다.
 
 ## 안전성
 

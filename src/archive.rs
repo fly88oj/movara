@@ -40,6 +40,12 @@ pub struct ExportStats {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectCarriage {
+    pub source_path: String,
+    pub included: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchiveManifest {
     pub format: u32,
     pub created: String,
@@ -52,6 +58,11 @@ pub struct ArchiveManifest {
     /// archives may never replace existing shared databases
     #[serde(default)]
     pub filtered: bool,
+    /// cross-host move carriage: which project the archive belongs to
+    /// and whether its tree is aboard (format stays 1 — v1.1 readers
+    /// ignore unknown members and defaulted fields)
+    #[serde(default)]
+    pub project: Option<ProjectCarriage>,
     /// every source project path the export could enumerate (registries,
     /// markers) — load-bearing for import-time path verification
     pub paths: Vec<String>,
@@ -99,13 +110,14 @@ fn is_db(p: &Path) -> bool {
 
 // --------------------------------------------------------------- writer
 
-pub struct ArchiveWriter {
-    final_path: PathBuf,
-    tmp_path: PathBuf,
-    builder: tar::Builder<flate2::write::GzEncoder<fs::File>>,
+pub struct ArchiveWriter<W: std::io::Write> {
+    /// Some = file sink: built at a `.part` path, renamed into place on
+    /// finish (atomic); None = stream sink (ssh stdin), no temp file
+    final_path: Option<(PathBuf, PathBuf)>,
+    builder: tar::Builder<flate2::write::GzEncoder<W>>,
 }
 
-impl ArchiveWriter {
+impl ArchiveWriter<fs::File> {
     /// build at a temp path first; the archive appears atomically on
     /// finish() and never exists half-written
     pub fn create(out: &Path) -> Result<Self> {
@@ -116,10 +128,21 @@ impl ArchiveWriter {
         let file = fs::File::create(&tmp_path)?;
         let gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
         Ok(ArchiveWriter {
-            final_path: out.to_path_buf(),
-            tmp_path,
+            final_path: Some((out.to_path_buf(), tmp_path)),
             builder: tar::Builder::new(gz),
         })
+    }
+}
+
+impl<W: std::io::Write> ArchiveWriter<W> {
+    /// wrap an existing writer (ssh stdin): streamed straight through,
+    /// nothing is renamed
+    pub fn from_writer(w: W) -> Self {
+        let gz = flate2::write::GzEncoder::new(w, flate2::Compression::default());
+        ArchiveWriter {
+            final_path: None,
+            builder: tar::Builder::new(gz),
+        }
     }
 
     fn header(len: u64, dir: bool) -> tar::Header {
@@ -149,15 +172,19 @@ impl ArchiveWriter {
         Ok(())
     }
 
-    pub fn finish(mut self, manifest: &ArchiveManifest) -> Result<PathBuf> {
+    pub fn finish(mut self, manifest: &ArchiveManifest) -> Result<Option<PathBuf>> {
         let bytes = serde_json::to_vec_pretty(manifest)?;
         self.add_file("manifest.json", &bytes)?;
         self.builder
             .into_inner()
             .and_then(|gz| gz.finish())
             .context("finalize archive")?;
-        fs::rename(&self.tmp_path, &self.final_path)?;
-        Ok(self.final_path)
+        if let Some((final_path, tmp_path)) = self.final_path {
+            fs::rename(&tmp_path, &final_path)?;
+            Ok(Some(final_path))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -174,17 +201,23 @@ impl Drop for Staging {
 }
 
 pub fn open(path: &Path) -> Result<Staging> {
+    open_stream(fs::File::open(path).with_context(|| path.display().to_string())?)
+}
+
+/// extract an archive from any reader (file, ssh stdin); the WHOLE stream
+/// is extracted before anything is placed, so a truncated stream fails
+/// here and nothing lands
+pub fn open_stream<R: std::io::Read>(r: R) -> Result<Staging> {
     let base = std::env::temp_dir().join(format!(
         "movara-import-{}",
         chrono::Local::now().format("%Y%m%d-%H%M%S-%6f")
     ));
     fs::create_dir_all(&base)?;
-    let file = fs::File::open(path).with_context(|| path.display().to_string())?;
-    let gz = flate2::read::GzDecoder::new(file);
+    let gz = flate2::read::GzDecoder::new(r);
     let mut ar = tar::Archive::new(gz);
     // tar's unpack refuses `..` and absolute members
     ar.unpack(&base)
-        .with_context(|| format!("{}: {}", t!("archive.err_extract"), path.display()))?;
+        .with_context(|| t!("archive.err_extract").to_string())?;
     let mpath = base.join("manifest.json");
     let manifest: ArchiveManifest = serde_json::from_str(&fs::read_to_string(&mpath)?)
         .with_context(|| t!("archive.err_manifest").to_string())?;
@@ -212,6 +245,10 @@ pub struct ExportOpts {
     pub filtered: bool,
     /// only state referencing these project paths (absolute, normalized)
     pub paths: Vec<String>,
+    /// carry the project tree under `project/` (cross-host move)
+    pub project: Option<PathBuf>,
+    /// state-only move: carry just the project-memory manifest
+    pub state_only: bool,
 }
 
 #[derive(Debug, Default, serde::Serialize)]
@@ -224,12 +261,34 @@ pub struct ExportReport {
     pub excluded: u64,
     pub projections: u64,
     pub paths: Vec<String>,
+    /// every archived FILE member (cleanup input; deterministic order)
+    pub members: Vec<String>,
+    /// project-tree files that look like secrets (carried, but warned)
+    pub secrets: Vec<String>,
 }
 
 pub fn run_export(ctx: &Ctx, list: &[Box<dyn Adapter>], opts: &ExportOpts) -> Result<ExportReport> {
-    let mut writer = ArchiveWriter::create(&opts.out)?;
+    let writer = ArchiveWriter::create(&opts.out)?;
+    run_export_into(
+        ctx,
+        list,
+        opts,
+        writer,
+        Some(crate::ctx::path_str(&opts.out)),
+    )
+}
+
+/// export into any writer (file sink for `movara export`, ssh stdin for
+/// `movara move`); consumes the writer and finishes the archive
+pub fn run_export_into<W: std::io::Write>(
+    ctx: &Ctx,
+    list: &[Box<dyn Adapter>],
+    opts: &ExportOpts,
+    mut writer: ArchiveWriter<W>,
+    archive_name: Option<String>,
+) -> Result<ExportReport> {
     let mut report = ExportReport {
-        archive: crate::ctx::path_str(&opts.out),
+        archive: archive_name.unwrap_or_default(),
         ..Default::default()
     };
     let sel = if opts.paths.is_empty() {
@@ -254,6 +313,26 @@ pub fn run_export(ctx: &Ctx, list: &[Box<dyn Adapter>], opts: &ExportOpts) -> Re
         }
         report.agents.push(adapter.name().to_string());
     }
+    // cross-host move carriage: the project tree (default) or the
+    // project-memory manifest (--state-only)
+    let project_carriage = match &opts.project {
+        Some(src) => {
+            if opts.state_only {
+                export_project_memory(src, &mut writer, &mut report)?;
+                Some(ProjectCarriage {
+                    source_path: crate::ctx::path_str(src),
+                    included: false,
+                })
+            } else {
+                export_project_tree(src, &mut writer, &mut report)?;
+                Some(ProjectCarriage {
+                    source_path: crate::ctx::path_str(src),
+                    included: true,
+                })
+            }
+        }
+        None => None,
+    };
     let manifest = ArchiveManifest {
         format: FORMAT,
         created: chrono::Local::now().to_rfc3339(),
@@ -265,6 +344,7 @@ pub fn run_export(ctx: &Ctx, list: &[Box<dyn Adapter>], opts: &ExportOpts) -> Re
         movara_version: crate::VERSION.to_string(),
         agents: report.agents.clone(),
         filtered: opts.filtered || !opts.paths.is_empty(),
+        project: project_carriage,
         paths: if opts.paths.is_empty() {
             enumerate_paths(ctx)
         } else {
@@ -280,15 +360,115 @@ pub fn run_export(ctx: &Ctx, list: &[Box<dyn Adapter>], opts: &ExportOpts) -> Re
     Ok(report)
 }
 
+/// project-tree carriage: everything except caches; `.git` RIDES (this is
+/// a move), `target/` and the cache-ish SKIP_DIRS do not; secret-looking
+/// files are carried but listed loudly
+fn export_project_tree<W: std::io::Write>(
+    src: &Path,
+    writer: &mut ArchiveWriter<W>,
+    report: &mut ExportReport,
+) -> Result<()> {
+    for entry in WalkDir::new(src)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_entry(|e| {
+            if e.depth() == 0 {
+                return true;
+            }
+            let name = e.file_name().to_str().unwrap_or("");
+            !("target" == name || (name != ".git" && adapters::SKIP_DIRS.contains(&name)))
+        })
+        .filter_map(|e| e.ok())
+    {
+        let rel = crate::ctx::path_str(entry.path().strip_prefix(src).unwrap_or(entry.path()));
+        if entry.file_type().is_dir() {
+            writer.add_dir(&format!("project/{}", rel))?;
+        } else if entry.file_type().is_file() {
+            let name = entry.file_name().to_str().unwrap_or("");
+            if secret_looking(name) {
+                report.secrets.push(format!("project/{}", rel));
+            }
+            let bytes = fs::read(entry.path())?;
+            writer.add_file(&format!("project/{}", rel), &bytes)?;
+            report.files += 1;
+            report.bytes += bytes.len() as u64;
+            report.members.push(format!("project/{}", rel));
+        }
+    }
+    Ok(())
+}
+
+/// in-project memory files that still travel on a --state-only move, so
+/// the agents' memory lands next to the code without carrying the code
+const PROJECT_MEMORY_FILES: &[&str] = &[
+    "CLAUDE.md",
+    "AGENTS.md",
+    "GEMINI.md",
+    ".clinerules",
+    "CONVENTIONS.md",
+];
+
+fn export_project_memory<W: std::io::Write>(
+    src: &Path,
+    writer: &mut ArchiveWriter<W>,
+    report: &mut ExportReport,
+) -> Result<()> {
+    for base in PROJECT_MEMORY_FILES {
+        let p = src.join(base);
+        if p.is_file() {
+            let bytes = fs::read(&p)?;
+            writer.add_file(&format!("project-memory/{}", base), &bytes)?;
+            report.files += 1;
+            report.bytes += bytes.len() as u64;
+            report.members.push(format!("project-memory/{}", base));
+        }
+    }
+    for dir in ["cursor-rules", "windsurf-rules"] {
+        let sub = match dir {
+            "cursor-rules" => src.join(".cursor").join("rules"),
+            _ => src.join(".windsurf").join("rules"),
+        };
+        if !sub.is_dir() {
+            continue;
+        }
+        for entry in WalkDir::new(&sub)
+            .sort_by_file_name()
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let rel = crate::ctx::path_str(entry.path().strip_prefix(src).unwrap_or(entry.path()));
+            let bytes = fs::read(entry.path())?;
+            writer.add_file(&format!("project-memory/{}", rel), &bytes)?;
+            report.files += 1;
+            report.bytes += bytes.len() as u64;
+            report.members.push(format!("project-memory/{}", rel));
+        }
+    }
+    Ok(())
+}
+
+fn secret_looking(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    n.starts_with(".env")
+        || n.ends_with(".pem")
+        || n.ends_with(".key")
+        || n.ends_with(".p12")
+        || n == ".netrc"
+        || n.starts_with("id_rsa")
+        || n.starts_with("id_ed25519")
+        || n.contains("credential")
+}
+
 /// archive one state root (a directory tree or a single file) under
 /// `data/<agent>/<home-relative-path>`
-fn export_root(
+fn export_root<W: std::io::Write>(
     ctx: &Ctx,
     agent: &str,
     root: &Path,
     sel: Option<&SelectionTokens>,
     filter_paths: &[String],
-    writer: &mut ArchiveWriter,
+    writer: &mut ArchiveWriter<W>,
     report: &mut ExportReport,
 ) -> Result<()> {
     let home_rel = match root.strip_prefix(&ctx.home) {
@@ -352,13 +532,13 @@ fn export_root(
     Ok(())
 }
 
-fn export_file(
+fn export_file<W: std::io::Write>(
     ctx: &Ctx,
     agent: &str,
     home_rel: &str,
     path: &Path,
     keep: Option<&[String]>,
-    writer: &mut ArchiveWriter,
+    writer: &mut ArchiveWriter<W>,
     report: &mut ExportReport,
 ) -> Result<()> {
     let raw = fetch_state_bytes(path)?;
@@ -369,14 +549,14 @@ fn export_file(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn export_file_bytes(
+fn export_file_bytes<W: std::io::Write>(
     _ctx: &Ctx,
     agent: &str,
     home_rel: &str,
     path: &Path,
     raw: &[u8],
     keep: Option<&[String]>,
-    writer: &mut ArchiveWriter,
+    writer: &mut ArchiveWriter<W>,
     report: &mut ExportReport,
 ) -> Result<()> {
     // dual-purpose configs leave as sanitized projections; under a path
@@ -385,10 +565,12 @@ fn export_file_bytes(
         let out = project_bytes(proj, raw, keep)?;
         return match out {
             Some(bytes) => {
-                writer.add_file(&format!("data/{}/{}", agent, home_rel), &bytes)?;
+                let member = format!("data/{}/{}", agent, home_rel);
+                writer.add_file(&member, &bytes)?;
                 report.projections += 1;
                 report.files += 1;
                 report.bytes += bytes.len() as u64;
+                report.members.push(member);
                 Ok(())
             }
             None => {
@@ -401,9 +583,11 @@ fn export_file_bytes(
         report.excluded += 1;
         return Ok(());
     }
-    writer.add_file(&format!("data/{}/{}", agent, home_rel), raw)?;
+    let member = format!("data/{}/{}", agent, home_rel);
+    writer.add_file(&member, raw)?;
     report.files += 1;
     report.bytes += raw.len() as u64;
+    report.members.push(member);
     Ok(())
 }
 
@@ -516,13 +700,13 @@ fn bytes_match(bytes: &[u8], tokens: &[String]) -> bool {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn export_root_filtered(
+fn export_root_filtered<W: std::io::Write>(
     ctx: &Ctx,
     agent: &str,
     root: &Path,
     sel: &SelectionTokens,
     keep: Option<&[String]>,
-    writer: &mut ArchiveWriter,
+    writer: &mut ArchiveWriter<W>,
     report: &mut ExportReport,
 ) -> Result<()> {
     let mut matched_dirs: Vec<PathBuf> = Vec::new();
@@ -653,6 +837,9 @@ pub struct ImportReport {
     pub skipped: u64,
     pub replaced: u64,
     pub merged: u64,
+    /// named shared databases a filtered exchange refused to replace
+    /// (their rows for the moved project did not land on this host)
+    pub skipped_shared_dbs: Vec<String>,
     pub missing_paths: Vec<String>,
     pub rules: Vec<(String, String)>,
     pub changes: usize,
@@ -789,6 +976,7 @@ pub fn run_import(
             if dst.exists() {
                 if is_db(&dst) && filtered_exchange {
                     report.skipped += 1;
+                    report.skipped_shared_dbs.push(crate::ctx::path_str(&dst));
                     eprintln!(
                         "{}",
                         t!(
@@ -1127,4 +1315,171 @@ fn split_toml_tables(text: &str) -> Vec<String> {
 // validate rules from raw CLI strings (see spec::prepare_rules)
 pub fn prepare_rules(raw: &[String]) -> Result<Vec<(String, String)>> {
     spec::prepare_rules(raw)
+}
+
+// ------------------------------------------------- receive-side carriage
+
+#[derive(Debug, Default, serde::Serialize)]
+pub struct PlacementReport {
+    pub project_files: u64,
+    pub memory_files: u64,
+    pub refused: Vec<String>,
+}
+
+/// place the `project/` tree at DST, creating DST; every member is
+/// re-validated (no `..`, no symlinks) and journaled as created
+pub fn place_project(
+    staging: &Staging,
+    dst: &Path,
+    backup: &mut Backup,
+    report: &mut PlacementReport,
+) -> Result<()> {
+    place_tree(&staging.dir.join("project"), dst, backup, report, "project")
+}
+
+/// place the `project-memory/` manifest into DST (same discipline)
+pub fn place_project_memory(
+    staging: &Staging,
+    dst: &Path,
+    backup: &mut Backup,
+    report: &mut PlacementReport,
+) -> Result<()> {
+    place_tree(
+        &staging.dir.join("project-memory"),
+        dst,
+        backup,
+        report,
+        "project-memory",
+    )
+}
+
+fn place_tree(
+    src_root: &Path,
+    dst: &Path,
+    backup: &mut Backup,
+    report: &mut PlacementReport,
+    kind: &str,
+) -> Result<()> {
+    if !src_root.is_dir() {
+        return Ok(());
+    }
+    for entry in WalkDir::new(src_root)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let rel = match entry.path().strip_prefix(src_root) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        if rel.components().any(|c| c == Component::ParentDir) {
+            report.refused.push(format!("{}/{}", kind, rel.display()));
+            continue;
+        }
+        // symlink members are refused outright: they can point anywhere
+        if entry.file_type().is_symlink() {
+            report.refused.push(format!("{}/{}", kind, rel.display()));
+            continue;
+        }
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let target = dst.join(rel);
+        if target.exists() {
+            // a move places a project into an empty destination; any
+            // pre-existing file is a conflict we refuse rather than clobber
+            report.refused.push(format!("{}/{}", kind, rel.display()));
+            continue;
+        }
+        ensure_dir_journaled(target.parent(), backup)?;
+        backup.record_created(&target);
+        crate::rewriters::write_atomic(&target, &fs::read(entry.path())?)?;
+        if kind == "project" {
+            report.project_files += 1;
+        } else {
+            report.memory_files += 1;
+        }
+    }
+    Ok(())
+}
+
+/// true when DST is absent or an empty directory (receive preflight)
+pub fn dst_available(dst: &Path) -> bool {
+    if !dst.exists() {
+        return true;
+    }
+    if !dst.is_dir() {
+        return false;
+    }
+    dst.read_dir()
+        .map(|mut it| it.next().is_none())
+        .unwrap_or(false)
+}
+
+// -------------------------------------------------------- source cleanup
+
+#[derive(Debug, Default, serde::Serialize)]
+pub struct CleanupReport {
+    pub removed: Vec<String>,
+    pub kept_shared: Vec<String>,
+}
+
+/// remove the exported state set on the source, member-list driven.
+/// Carve-outs that make it safe: shared members — databases and
+/// projection carriers — hold other projects' rows/keys and are NEVER
+/// deleted on a filtered exchange (their row-level removal waits for
+/// the additive machinery); directories are pruned bottom-up only
+/// when left empty, and a state root itself is never removed.
+pub fn cleanup_source(ctx: &Ctx, members: &[String], backup: &mut Backup) -> Result<CleanupReport> {
+    let mut report = CleanupReport::default();
+    let mut parent_dirs: Vec<PathBuf> = Vec::new();
+    for m in members {
+        let Some(rest) = m.strip_prefix("data/") else {
+            continue; // project/ and project-memory/ members stay
+        };
+        let mut parts = rest.splitn(2, '/');
+        let Some(_agent) = parts.next() else { continue };
+        let Some(home_rel) = parts.next() else {
+            continue;
+        };
+        if home_rel.is_empty() || home_rel.contains("..") {
+            continue;
+        }
+        let local = ctx.home.join(home_rel);
+        if !local.is_file() {
+            continue;
+        }
+        // wal/shm sidecars of a database are part of it: deleting them
+        // would drop sibling projects' committed-but-uncheckpointed data
+        let sidecar_of_db = {
+            let stem = home_rel
+                .strip_suffix("-wal")
+                .or_else(|| home_rel.strip_suffix("-shm"));
+            stem.is_some_and(|st| is_db(Path::new(st)))
+        };
+        if is_db(&local) || sidecar_of_db || projection_for(home_rel).is_some() {
+            report.kept_shared.push(home_rel.to_string());
+            continue;
+        }
+        backup.record_file(&local)?;
+        fs::remove_file(&local)?;
+        report.removed.push(home_rel.to_string());
+        if let Some(parent) = local.parent() {
+            parent_dirs.push(parent.to_path_buf());
+        }
+    }
+    // prune emptied directories, never a state root or the home itself
+    parent_dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+    parent_dirs.dedup();
+    let roots: Vec<PathBuf> = crate::adapters::all()
+        .iter()
+        .flat_map(|a| a.state_paths(ctx))
+        .collect();
+    for d in parent_dirs {
+        if d == ctx.home || roots.iter().any(|r| r == &d) {
+            continue;
+        }
+        let _ = fs::remove_dir(&d); // only succeeds when empty
+    }
+    Ok(report)
 }

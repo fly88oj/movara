@@ -116,6 +116,8 @@ src == dst は拒否します。
 | `movara agents` | 対応エージェントとインストール状態の一覧 |
 | `movara export [--path PATH]... [--agents LIST]` | エージェント状態を可搬な `.tar.gz` に書き出す。ホスト全体、またはパス/エージェントで絞り込み |
 | `movara import <ARCHIVE> [--rebase OLD:NEW]...` | アーカイブをこのホストに復元しパスをリベース。移行と同じくジャーナル化され `movara undo` で完全に取り消せます |
+| `movara move <SRC> [user@]host:<DST>` | プロジェクトとエージェント状態を ssh 経由で 1 コマンドで別ホストへ移動 — 記憶も同行、クリーンアップは任意（IPv6 ホストリテラルは不可） |
+| `movara receive --dst <DST>` | [受け側] stdin のストリームアーカイブを取り込む（`move` が起動） |
 
 ### オプション
 
@@ -133,8 +135,13 @@ src == dst は拒否します。
 | `--out FILE` | export | アーカイブパス（デフォルト `movara-export-<タイムスタンプ>.tar.gz`） |
 | `--path PATH` | export | このプロジェクトパスを参照する状態のみ（繰り返し可。`--agents` との積） |
 | `--rebase OLD:NEW` | import | パスマッピング。繰り返し可。重複・連鎖ルールは拒否されます |
+| `--dst <DST>` | receive | このホストでのプロジェクト配置先 |
+| `--plan-only` | receive | 宛先を事前チェックして終了 |
+| `--yes` | receive | 非対話（ストリーム受信時に必須） |
 | `--on-conflict POLICY` | import | 既存ローカル状態への `skip`（デフォルト）または `replace` |
 | `--allow-missing-path` | import | アーカイブパスがローカルに存在しなくても続行 |
+| `--state-only` | move | コードを除きエージェント状態とプロジェクト記憶のみ運ぶ |
+| `--cleanup` | move | 検証成功後に移動元の状態セットを削除（共有 DB/設定は残す） |
 
 ### undo とバックアップ
 
@@ -157,6 +164,7 @@ src == dst は拒否します。
   ください。
 
 `export` / `import` も同様にジャーナル化されます。`undo` は作成された状態も含めてインポートを完全に巻き戻します。
+クロスホスト `move` はプロジェクトツリー（`.git` を含む）も交換します。`--state-only` はコードを除外しつつプロジェクト内記憶ファイル（CLAUDE.md、AGENTS.md、rules）は保持し、`--cleanup` は移動済み状態セットのみを削除（共有 DB や設定は決して削除しない）し、それ自体取り消し可能です。
 
 ## 安全性
 

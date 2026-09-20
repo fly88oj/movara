@@ -98,6 +98,8 @@ Verhalten von `movara mv`: scannen und anzeigen, welcher Agentenzustand den alte
 | `movara agents` | listet unterstützte Agenten und deren Installationsstatus |
 | `movara export [--path PFAD]... [--agents LISTE]` | schreibt ein portables `.tar.gz`-Archiv — ganzer Host oder nach Projektpfad / Agenten gefiltert |
 | `movara import <ARCHIV> [--rebase OLD:NEW]...` | stellt ein Archiv auf diesem Host wieder her und rebaset Pfade; wie eine Migration journaleliert, also mit `movara undo` vollständig rückgängig |
+| `movara move <SRC> [benutzer@]host:<ZIEL>` | verschiebt ein Projekt UND seinen Agentenzustand per ssh in einem Befehl auf einen anderen Host — Speicher reist mit, Bereinigung optional (keine IPv6-Literale) |
+| `movara receive --dst <ZIEL>` | [Zielseite] importiert das gestreamte Archiv von stdin (von `move` gestartet) |
 
 ### Optionen
 
@@ -115,8 +117,13 @@ Verhalten von `movara mv`: scannen und anzeigen, welcher Agentenzustand den alte
 | `--out FILE` | export | Archivpfad (Standard `movara-export-<zeitstempel>.tar.gz`) |
 | `--path PFAD` | export | nur Zustand, der diesen Projektpfad referenziert (wiederholbar; Schnitt mit `--agents`) |
 | `--rebase OLD:NEW` | import | Pfad-Mapping, wiederholbar; überlappende und verkettete Regeln werden abgelehnt |
+| `--dst <DST>` | receive | Zielverzeichnis des Projekts auf diesem Host |
+| `--plan-only` | receive | Ziel prüfen und beenden |
+| `--yes` | receive | nicht-interaktiv (beim Streaming erforderlich) |
 | `--on-conflict RICHTLINIE` | import | `skip` (Standard) oder `replace` vorhandenen lokalen Zustand |
 | `--allow-missing-path` | import | fortfahren, wenn Archivpfade lokal nicht existieren |
+| `--state-only` | move | nur Zustand + Projektspeicher übertragen, nicht den Code |
+| `--cleanup` | move | nach verifiziertem Erfolg den migrierten Satz auf diesem Host entfernen (gemeinsame DBs/Configs bleiben) |
 
 ### Undo & Backups
 
@@ -141,6 +148,7 @@ Projektverzeichnisses.
   und sollte vor einer neuen Migration derselben Pfade laufen.
 
 Austausch über `export` / `import` wird genauso journaleliert: `undo` macht eine Importierung vollständig rückgängig, inklusive des von ihr erzeugten Zustands.
+Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den Austausch: `--state-only` lässt den Code weg, behält aber die Projekt-Speicherdateien (CLAUDE.md, AGENTS.md, rules); `--cleanup` löscht nur den migrierten Satz auf der Quelle — niemals gemeinsame Datenbanken oder Configs — und ist selbst rückgängig machbar.
 
 ## Sicherheit
 

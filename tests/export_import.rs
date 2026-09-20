@@ -43,6 +43,8 @@ fn do_export(fx: &Fixture, tag: &str) -> PathBuf {
             out: out.clone(),
             filtered: false,
             paths: vec![],
+            project: None,
+            state_only: false,
         },
     )
     .unwrap();
@@ -445,6 +447,8 @@ fn filtered_import_never_replaces_shared_databases() {
             out: out.clone(),
             filtered: true,
             paths: vec![],
+            project: None,
+            state_only: false,
         },
     )
     .unwrap();
@@ -501,6 +505,8 @@ fn path_filtered_export_selects_and_rebases() {
             out: out.clone(),
             filtered: true,
             paths: vec![fx.old.clone()],
+            project: None,
+            state_only: false,
         },
     )
     .unwrap();
@@ -628,6 +634,8 @@ fn deep_basename_directory_does_not_leak() {
             out: out.clone(),
             filtered: true,
             paths: vec![fx.old.clone()],
+            project: None,
+            state_only: false,
         },
     )
     .unwrap();

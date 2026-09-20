@@ -115,6 +115,8 @@ and src == dst are refused.
 | `movara agents` | list supported agents and whether each is installed |
 | `movara export [--path PATH]... [--agents LIST]` | write a portable `.tar.gz` archive of agent state — whole host, or filtered by project path / agents |
 | `movara import <ARCHIVE> [--rebase OLD:NEW]...` | restore an archive on this host, rebasing paths; journaled like a migration, so `movara undo` reverses it |
+| `movara move <SRC> [user@]host:<DST>` | move a project AND its agent state to another host over ssh in one command — memory rides along, cleanup optional (no IPv6 host literals) |
+| `movara receive --dst <DST>` | [target side] import the streamed archive from stdin (spawned by `move`) |
 
 ### Options
 
@@ -132,8 +134,13 @@ and src == dst are refused.
 | `--out FILE` | export | archive path (default `movara-export-<timestamp>.tar.gz`) |
 | `--path PATH` | export | only state referencing this project path (repeatable; intersects `--agents`) |
 | `--rebase OLD:NEW` | import | path mapping, repeatable; overlapping and chained rules are refused |
+| `--dst <DST>` | receive | destination directory for the project on this host |
+| `--plan-only` | receive | preflight the destination, then exit |
+| `--yes` | receive | non-interactive (required when streaming) |
 | `--on-conflict POLICY` | import | `skip` (default) or `replace` existing local state |
 | `--allow-missing-path` | import | proceed when archive paths resolve to nothing locally |
+| `--state-only` | move | carry agent state + project memory, not the code |
+| `--cleanup` | move | remove the moved state set on this host after verified success (shared dbs/configs stay) |
 
 ### Undo & backups
 
@@ -155,6 +162,7 @@ including the moved project directory.
   before a new migration of the same paths.
 
 Exchanges via `export` / `import` are journaled the same way: `undo` reverses an import completely, including state it created.
+A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state-only` drops the code but keeps in-project memory files (CLAUDE.md, AGENTS.md, rules); `--cleanup` deletes only the moved state set on the source — never shared databases or configs — and is itself reversible.
 
 ## Safety
 

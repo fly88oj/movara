@@ -17,6 +17,19 @@ contact address in the commit metadata) and include:
 You will get an acknowledgement within a few days. Coordinated disclosure
 (CVE + advisory + patch release together) is preferred.
 
+## Cross-host moves (v1.2)
+
+`movara move` shells out to `ssh -T` and streams the archive to a
+`movara receive` on the target — the transport is exactly as
+trustworthy as your ssh channel. `receive` places files only: state
+under the validated agent roots, the project tree under the
+destination you name, with per-member revalidation (no `..`, no
+symlink members); it never executes anything from the stream, and a
+truncated stream places nothing. Its write surface is wider BY DESIGN
+(a project lands where you point it), so `receive` is only as
+trustworthy as the stream's source — never pipe an archive you did
+not produce yourself.
+
 ## Trust model
 
 movara deliberately rewrites files it does not own (agent state

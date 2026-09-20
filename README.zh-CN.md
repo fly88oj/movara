@@ -106,6 +106,8 @@ movara undo --id 20260903-131427-644777
 | `movara agents` | 列出支持的 Agent 及安装状态 |
 | `movara export [--path PATH]... [--agents LIST]` | 把 Agent 状态打包为可携带的 `.tar.gz` 档案——默认整台主机，也可按项目路径 / Agent 过滤 |
 | `movara import <ARCHIVE> [--rebase OLD:NEW]...` | 在本机恢复档案并按规则重定基路径；像迁移一样记日志，可用 `movara undo` 完整撤销 |
+| `movara move <SRC> [user@]host:<DST>` | 一条命令经 ssh 把项目与 Agent 状态一起搬到另一台主机——记忆随行，可选源端清理（不支持 IPv6 主机字面量） |
+| `movara receive --dst <DST>` | [目标端] 从 stdin 导入流式档案（由 `move` 拉起） |
 
 ### 选项
 
@@ -123,8 +125,13 @@ movara undo --id 20260903-131427-644777
 | `--out FILE` | export | 档案路径（默认 `movara-export-<时间戳>.tar.gz`） |
 | `--path PATH` | export | 只导出引用此项目路径的状态（可重复；与 `--agents` 取交集） |
 | `--rebase OLD:NEW` | import | 路径映射，可重复；重叠与链式规则会被拒绝 |
+| `--dst <DST>` | receive | 本机的项目目标目录 |
+| `--plan-only` | receive | 仅预检目标后退出 |
+| `--yes` | receive | 非交互（流式接收必填） |
 | `--on-conflict POLICY` | import | `skip`（默认）或 `replace` 已存在的本地状态 |
 | `--allow-missing-path` | import | 档案路径在本地不存在时仍继续 |
+| `--state-only` | move | 只携带 Agent 状态与项目记忆，不带代码 |
+| `--cleanup` | move | 验证成功后删除本机的已迁移状态集（共享库/配置保留） |
 
 ### 撤销与备份
 
@@ -142,6 +149,7 @@ movara undo --id 20260903-131427-644777
   再次迁移之前应先执行撤销。
 
 `export` / `import` 同样全程记日志：`undo` 可完整逆转一次导入，包括它新建的状态。
+跨主机 `move` 会把项目树（含 `.git`）一并交换：`--state-only` 不带代码但保留项目内记忆文件（CLAUDE.md、AGENTS.md、rules）；`--cleanup` 只删源端已迁移的状态集——绝不删共享数据库或配置——且本身可撤销。
 
 ## 安全
 

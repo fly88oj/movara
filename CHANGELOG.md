@@ -8,6 +8,16 @@ List items must each be a single source line (no hard wrapping): the
 release workflow extracts this file verbatim as the GitHub Release body,
 and the release page renders every newline as a forced break.
 
+## [Unreleased]
+
+### Added
+
+- **`movara move <SRC> [user@]host:<DST>`** — one command moves a project AND its agent state to another host: the target's `movara receive` (spawned over `ssh -T`) consumes the streamed archive, places the project at `<DST>`, derives the rebase rule itself (a same-path move is the defined verbatim import) and answers with a structured per-member report. The project tree rides by default (`.git` included, `target/` and caches not, secret-looking files listed loudly); `--state-only` carries agent state plus the in-project memory manifest (CLAUDE.md, AGENTS.md, rules) without the code.
+- **Project-scoped memory moves with the workspace**: home-side per-project memory stores (pi/omp `projects-memory/<basename>`, zcode `memories/projects/<key>`) are selected through their directory keys — prose memory carries no path string — and re-key on import; the memory inventory per agent is recorded in `docs/research.md`. Global memory deliberately stays put (merging two hosts' global memory needs the additive machinery on the roadmap).
+- **`movara receive --dst <DST>`** — the move target side: refuses TTY stdin, requires `--yes`, extracts the WHOLE stream before placing anything (a truncated stream lands nothing), journals before the first placement so even a kill mid-placement stays reversible, and refuses conflicting or escaping members (no `..`, no symlinks).
+- **`--cleanup` on move** — after verified success, removes exactly the exported member set on the source, journaled and reversible; shared databases and config carriers (other projects' rows and keys live there) are never deleted, and the user's project code is never touched.
+- **Engine**: the archive writer is `Write`-generic (file sink stays atomic via `.part`+rename; ssh stdin streams straight through), `open_stream` extracts from any reader, `ExportReport` carries the member list and secret warnings, and the manifest records project carriage (format stays 1 — v1.1 readers ignore the additions).
+
 ## [1.1.0] - 2026-09-18
 
 ### Added

@@ -119,6 +119,8 @@ origen == destino.
 | `movara agents` | lista los agentes admitidos y su estado de instalación |
 | `movara export [--path RUTA]... [--agents LISTA]` | escribe un archivo `.tar.gz` portátil del estado — todo el host, o filtrado por ruta de proyecto / agentes |
 | `movara import <ARCHIVO> [--rebase OLD:NEW]...` | restaura un archivo en este host remapeando rutas; se registra como una migración, así que `movara undo` lo revierte |
+| `movara move <SRC> [usuario@]host:<DST>` | mueve un proyecto Y su estado de agentes a otro host por ssh en un comando — la memoria viaja, limpieza opcional (sin literales IPv6) |
+| `movara receive --dst <DST>` | [lado destino] importa el archivo en flujo desde stdin (lo lanza `move`) |
 
 ### Opciones
 
@@ -136,8 +138,13 @@ origen == destino.
 | `--out FILE` | export | ruta del archivo (por defecto `movara-export-<marca-de-tiempo>.tar.gz`) |
 | `--path RUTA` | export | solo el estado que referencia esta ruta de proyecto (repetible; interseca con `--agents`) |
 | `--rebase OLD:NEW` | import | mapeo de rutas, repetible; las reglas solapadas o encadenadas se rechazan |
+| `--dst <DST>` | receive | directorio de destino del proyecto en este host |
+| `--plan-only` | receive | comprobar el destino y salir |
+| `--yes` | receive | no interactivo (obligatorio en streaming) |
 | `--on-conflict POLICY` | import | `skip` (por defecto) o `replace` el estado local existente |
 | `--allow-missing-path` | import | continuar cuando las rutas del archivo no existan localmente |
+| `--state-only` | move | llevar solo estado + memoria del proyecto, no el código |
+| `--cleanup` | move | eliminar el conjunto migrado en este host tras el éxito verificado (las bases/configs compartidas se quedan) |
 
 ### Deshacer y copias de seguridad
 
@@ -160,6 +167,7 @@ incluye el directorio movido.
   las mismas rutas.
 
 Los intercambios con `export` / `import` se registran igual: `undo` revierte una importación por completo, incluido el estado que creó.
+Un `move` entre hosts añade el árbol del proyecto (con `.git`) al intercambio: `--state-only` descarta el código pero conserva los archivos de memoria del proyecto (CLAUDE.md, AGENTS.md, rules); `--cleanup` borra solo el conjunto migrado en el origen — nunca bases de datos ni configs compartidas — y es reversible.
 
 ## Seguridad
 
