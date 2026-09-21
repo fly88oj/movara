@@ -199,6 +199,12 @@ pre-commit install                        # 本地钩子（与 CI 一致）
 ```
 
 详见 [CONTRIBUTING.md](CONTRIBUTING.md)（适配器指南、提交规范）、
+> **跨主机同步（sync）正在为下一版本开发中**——见
+> [CHANGELOG.md](CHANGELOG.md) 的 Unreleased 一节。
+
+> **跨主机同步（sync）正在为下一版本开发中**——见
+> [CHANGELOG.md](CHANGELOG.md) 的 Unreleased 一节。
+
 [CHANGELOG.md](CHANGELOG.md)（版本历史）、[SECURITY.md](SECURITY.md)、
 [docs/research.zh-CN.md](docs/research.zh-CN.md)（各 Agent 存储格式与来源）。
 

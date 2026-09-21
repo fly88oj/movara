@@ -197,7 +197,11 @@ cargo fmt --all -- --check
 pre-commit install                        # hooks locaux (identiques à la CI)
 ```
 
-Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour le guide d'adaptateur, les conventions de commit et la mise en place ; [CHANGELOG.md](CHANGELOG.md) pour l'historique des versions ; [SECURITY.md](SECURITY.md) pour signaler un problème de sécurité ; [docs/research.md](docs/research.md) pour les formats de stockage, encodages et sources par agent.
+Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour le guide d'adaptateur,
+> **La synchronisation inter-hôtes est en cours de développement**
+> pour la prochaine version — voir la section Unreleased de
+> [CHANGELOG.md](CHANGELOG.md).
+ les conventions de commit et la mise en place ; [CHANGELOG.md](CHANGELOG.md) pour l'historique des versions ; [SECURITY.md](SECURITY.md) pour signaler un problème de sécurité ; [docs/research.md](docs/research.md) pour les formats de stockage, encodages et sources par agent.
 
 ## Licence
 

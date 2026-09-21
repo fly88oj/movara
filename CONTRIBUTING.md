@@ -38,7 +38,8 @@ src/
   encodings.rs            per-vendor directory-name encodings & hashes
   ctx.rs                  cross-platform state-dir resolution
   i18n.rs + locales/      UI languages (en, zh-CN, ja, ko, es, fr, de, pt-BR)
-  cli.rs                  clap CLI (scan / migrate / mv / export / import / move / receive / undo / backups)
+  cli.rs                  clap CLI (scan / migrate / mv / export / import / move / receive / sync / undo / backups)
+  sync.rs                 sync pair store, ledger, merge planner, apply, probe, lease
   adapters/               one module per agent family
 build.rs                  rebuild when locales/*.yml change
 scripts/                  commit-message & no-local-info hook scripts

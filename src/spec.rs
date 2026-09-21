@@ -266,7 +266,7 @@ pub fn prepare_rules(raw: &[String]) -> Result<Vec<(String, String)>> {
 }
 
 #[inline]
-fn utf8_char_len(first_byte: u8) -> usize {
+pub(crate) fn utf8_char_len(first_byte: u8) -> usize {
     match first_byte {
         0x00..=0x7F => 1,
         0xC0..=0xDF => 2,

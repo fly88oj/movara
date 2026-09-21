@@ -195,7 +195,10 @@ cargo fmt --all -- --check
 pre-commit install                        # 로컬 훅 (CI와 동일)
 ```
 
-어댑터 가이드·커밋 규칙·설정은 [CONTRIBUTING.md](CONTRIBUTING.md), 릴리스 역사는 [CHANGELOG.md](CHANGELOG.md), 보안 이슈 신고는 [SECURITY.md](SECURITY.md), 에이전트별 저장 포맷·인코딩·출처는 [docs/research.md](docs/research.md)를 참고하세요.
+어댑터 가이드·커밋 규칙·설정은 [CONTRIBUTING.md](CONTRIBUTING.md), 릴리스 역사는
+> **크로스호스트 동기화(sync)는 다음 릴리스를 위해 개발 중입니다** —
+> [CHANGELOG.md](CHANGELOG.md)의 Unreleased 항목을 참고하세요.
+ [CHANGELOG.md](CHANGELOG.md), 보안 이슈 신고는 [SECURITY.md](SECURITY.md), 에이전트별 저장 포맷·인코딩·출처는 [docs/research.md](docs/research.md)를 참고하세요.
 
 ## 라이선스
 

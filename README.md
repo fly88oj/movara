@@ -221,7 +221,13 @@ pre-commit install                        # local hooks (same as CI)
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the adapter guide, commit
-conventions and setup; [CHANGELOG.md](CHANGELOG.md) for release history;
+> **Cross-host sync is under development** for the next release —
+> see the Unreleased section of [CHANGELOG.md](CHANGELOG.md).
+
+conventions and setup;
+> **Cross-host sync is under development** for the next release —
+> see the Unreleased section of [CHANGELOG.md](CHANGELOG.md).
+ [CHANGELOG.md](CHANGELOG.md) for release history;
 [SECURITY.md](SECURITY.md) for reporting security issues;
 [docs/research.md](docs/research.md) for per-agent storage formats,
 encodings and sources.

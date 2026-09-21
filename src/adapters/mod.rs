@@ -358,6 +358,13 @@ pub trait Adapter {
         // default: every root is home-direct (true for the majority)
         vec![crate::ctx::RootKind::Home]
     }
+
+    /// CLI process names the sync liveness probe watches (GUI IDEs are
+    /// mtime/WAL-gated instead — an open-but-idle Cursor is fine)
+    fn process_names(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     fn scan(&self, _ctx: &Ctx, _spec: &ReplaceSpec) -> Vec<Finding> {
         Vec::new()
     }

@@ -6,9 +6,11 @@ use crate::adapters::{self, Adapter};
 use crate::backup::{self, Backup};
 use crate::ctx::Ctx;
 use crate::spec::ReplaceSpec;
+use crate::sync;
 use anyhow::{bail, Context as _, Result};
 use clap::{Args, Parser, Subcommand};
 use rust_i18n::t;
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -179,6 +181,129 @@ pub enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// sync a registered pair's project state with the other host
+    Sync {
+        /// pair name to run now (see `movara sync pair list`)
+        name: Option<String>,
+        /// liveness freshness window in seconds
+        #[arg(long, default_value_t = 180)]
+        freshness: u64,
+        /// report the plan only; change nothing
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        #[arg(long)]
+        backup_dir: Option<PathBuf>,
+        /// JSON output
+        #[arg(long)]
+        json: bool,
+        #[command(subcommand)]
+        cmd: Option<SyncSub>,
+    },
+    /// [internal] sync protocol steps, driven over ssh by `movara sync`
+    #[command(hide = true)]
+    SyncAgent {
+        #[command(subcommand)]
+        cmd: AgentCmd,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum SyncSub {
+    /// manage sync pairs
+    Pair {
+        #[command(subcommand)]
+        cmd: PairCmd,
+    },
+    /// show a pair's sync status (advisory; takes no lease)
+    Status {
+        name: String,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum PairCmd {
+    /// register a pair
+    Add {
+        name: String,
+        /// absolute project path on this host
+        #[arg(long)]
+        local: PathBuf,
+        /// remote ssh destination [user@]host
+        #[arg(long)]
+        host: String,
+        /// absolute project path on the other host
+        #[arg(long)]
+        remote: String,
+        /// also sync the project tree (roadmap; state sync only for now)
+        #[arg(long = "with-files")]
+        with_files: bool,
+        /// comma list of agents (default: all installed)
+        #[arg(long)]
+        agents: Option<String>,
+    },
+    /// list registered pairs
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// remove a pair registration (state on both hosts is untouched)
+    Remove { name: String },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum AgentCmd {
+    /// liveness probe; JSON ProbeReport on stdout
+    Probe {
+        #[arg(long)]
+        project: String,
+        #[arg(long, default_value_t = 180)]
+        freshness: u64,
+        #[arg(long)]
+        agents: Option<String>,
+    },
+    /// member inventory; JSON map on stdout
+    Inventory {
+        #[arg(long)]
+        project: String,
+        /// the OTHER host's project path (hash canonicalization)
+        #[arg(long)]
+        other: String,
+        #[arg(long)]
+        pair: String,
+        #[arg(long)]
+        agents: Option<String>,
+    },
+    /// read members' bytes; stdin: JSON array of members, stdout: {"member": base64}
+    Pack {
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        agents: Option<String>,
+    },
+    /// apply one half of a plan; stdin: {"plan": [...], "staging": {"member": base64}},
+    /// stdout: JSON ApplyReport
+    Apply {
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        other: String,
+        #[arg(long)]
+        pair: String,
+        /// which endpoint this host is (a | b)
+        #[arg(long)]
+        side: String,
+        #[arg(long)]
+        run: String,
+        #[arg(long)]
+        agents: Option<String>,
+    },
+    /// persist the authoritative ledger; stdin: JSON LedgerState
+    Commit {
+        #[arg(long)]
+        pair: String,
+    },
 }
 
 #[derive(Args)]
@@ -309,6 +434,22 @@ pub fn run() -> Result<()> {
                 .unwrap_or_else(|| ctx.default_backup_dir()),
             *json,
         ),
+        Cmd::Sync {
+            name,
+            freshness,
+            dry_run,
+            backup_dir,
+            json,
+            cmd,
+        } => match cmd {
+            Some(SyncSub::Pair { cmd }) => cmd_sync_pair(&ctx, (*cmd).clone()),
+            Some(SyncSub::Status { name, json }) => cmd_sync_status(&ctx, name, *json),
+            None => match name {
+                Some(n) => cmd_sync(&ctx, n, *freshness, *dry_run, backup_dir.clone(), *json),
+                None => bail!("{}", t!("sync.err_name")),
+            },
+        },
+        Cmd::SyncAgent { cmd } => cmd_sync_agent(&ctx, (*cmd).clone()),
     }
 }
 
@@ -1281,4 +1422,748 @@ fn cmd_backups(dir: PathBuf, json: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+// ------------------------------------------------------------------ sync
+
+/// the remote half of the sync protocol, transport-injected: ssh in
+/// production (SshSyncTransport below), the second Ctx in-process in
+/// tests — the same seam receive_core uses for `movara move`
+pub trait SyncTransport {
+    fn probe(
+        &self,
+        project: &str,
+        freshness: u64,
+        agents: Option<&str>,
+    ) -> Result<sync::ProbeReport>;
+    fn inventory(
+        &self,
+        project: &str,
+        other: &str,
+        pair_id: &str,
+        agents: Option<&str>,
+    ) -> Result<BTreeMap<String, sync::MemberInv>>;
+    /// raw bytes of the given members from the other host
+    fn pack(
+        &self,
+        project: &str,
+        members: &[String],
+        agents: Option<&str>,
+    ) -> Result<sync::Staging>;
+    #[allow(clippy::too_many_arguments)]
+    fn apply(
+        &self,
+        project: &str,
+        other: &str,
+        pair_id: &str,
+        run_id: &str,
+        side_a: bool,
+        plan: &[sync::PlannedMember],
+        staging: &sync::Staging,
+        agents: Option<&str>,
+    ) -> Result<sync::ApplyReport>;
+    /// persist the authoritative ledger on the other host
+    fn commit(&self, pair_id: &str, ledger: &sync::LedgerState) -> Result<()>;
+}
+
+/// runs `movara sync-agent <step>` on the other host over ssh
+struct SshSyncTransport<'a> {
+    host: &'a str,
+}
+
+fn json_over_ssh(
+    cmd: &mut std::process::Command,
+    stdin: Option<&[u8]>,
+) -> Result<serde_json::Value> {
+    use std::process::Stdio;
+    if stdin.is_some() {
+        cmd.stdin(Stdio::piped());
+    }
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let out = match stdin {
+        None => cmd.output(),
+        Some(payload) => {
+            let mut child = cmd.spawn().context("spawn ssh")?;
+            child
+                .stdin
+                .take()
+                .context("ssh stdin")?
+                .write_all(payload)?;
+            // drop our handle so the remote sees EOF, then collect
+            drop(child.stdin.take());
+            child.wait_with_output()
+        }
+    }?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        bail!("{}", t!("sync.err_transport", err = err.as_str()));
+    }
+    Ok(serde_json::from_slice(&out.stdout)?)
+}
+
+impl SyncTransport for SshSyncTransport<'_> {
+    fn probe(
+        &self,
+        project: &str,
+        freshness: u64,
+        agents: Option<&str>,
+    ) -> Result<sync::ProbeReport> {
+        let mut c = std::process::Command::new("ssh");
+        c.arg("-T")
+            .arg(self.host)
+            .arg("movara")
+            .arg("sync-agent")
+            .arg("probe")
+            .arg("--project")
+            .arg(shell_quote(project))
+            .arg("--freshness")
+            .arg(freshness.to_string());
+        if let Some(a) = agents {
+            c.arg("--agents").arg(shell_quote(a));
+        }
+        Ok(serde_json::from_value(json_over_ssh(&mut c, None)?)?)
+    }
+
+    fn inventory(
+        &self,
+        project: &str,
+        other: &str,
+        pair_id: &str,
+        agents: Option<&str>,
+    ) -> Result<BTreeMap<String, sync::MemberInv>> {
+        let mut c = std::process::Command::new("ssh");
+        c.arg("-T")
+            .arg(self.host)
+            .arg("movara")
+            .arg("sync-agent")
+            .arg("inventory")
+            .arg("--project")
+            .arg(shell_quote(project))
+            .arg("--other")
+            .arg(shell_quote(other))
+            .arg("--pair")
+            .arg(shell_quote(pair_id));
+        if let Some(a) = agents {
+            c.arg("--agents").arg(shell_quote(a));
+        }
+        Ok(serde_json::from_value(json_over_ssh(&mut c, None)?)?)
+    }
+
+    fn pack(
+        &self,
+        project: &str,
+        members: &[String],
+        agents: Option<&str>,
+    ) -> Result<sync::Staging> {
+        let mut c = std::process::Command::new("ssh");
+        c.arg("-T")
+            .arg(self.host)
+            .arg("movara")
+            .arg("sync-agent")
+            .arg("pack")
+            .arg("--project")
+            .arg(shell_quote(project));
+        if let Some(a) = agents {
+            c.arg("--agents").arg(shell_quote(a));
+        }
+        let payload = serde_json::to_vec(members)?;
+        let v = json_over_ssh(&mut c, Some(&payload))?;
+        use base64::Engine as _;
+        let mut out = sync::Staging::new();
+        for (m, b64) in v.as_object().context("pack payload")? {
+            let s = b64.as_str().context("pack: non-string entry")?;
+            out.insert(
+                m.clone(),
+                base64::engine::general_purpose::STANDARD.decode(s)?,
+            );
+        }
+        Ok(out)
+    }
+
+    fn apply(
+        &self,
+        project: &str,
+        other: &str,
+        pair_id: &str,
+        run_id: &str,
+        side_a: bool,
+        plan: &[sync::PlannedMember],
+        staging: &sync::Staging,
+        agents: Option<&str>,
+    ) -> Result<sync::ApplyReport> {
+        use base64::Engine as _;
+        let mut wire_staging = serde_json::Map::new();
+        for (m, bytes) in staging {
+            wire_staging.insert(
+                m.clone(),
+                serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(bytes)),
+            );
+        }
+        let payload = serde_json::to_vec(&serde_json::json!({
+            "plan": plan,
+            "staging": wire_staging,
+        }))?;
+        let mut c = std::process::Command::new("ssh");
+        c.arg("-T")
+            .arg(self.host)
+            .arg("movara")
+            .arg("sync-agent")
+            .arg("apply")
+            .arg("--project")
+            .arg(shell_quote(project))
+            .arg("--other")
+            .arg(shell_quote(other))
+            .arg("--pair")
+            .arg(shell_quote(pair_id))
+            .arg("--side")
+            .arg(if side_a { "a" } else { "b" })
+            .arg("--run")
+            .arg(shell_quote(run_id));
+        if let Some(a) = agents {
+            c.arg("--agents").arg(shell_quote(a));
+        }
+        Ok(serde_json::from_value(json_over_ssh(
+            &mut c,
+            Some(&payload),
+        )?)?)
+    }
+
+    fn commit(&self, pair_id: &str, ledger: &sync::LedgerState) -> Result<()> {
+        let payload = serde_json::to_vec(ledger)?;
+        let mut c = std::process::Command::new("ssh");
+        c.arg("-T")
+            .arg(self.host)
+            .arg("movara")
+            .arg("sync-agent")
+            .arg("commit")
+            .arg("--pair")
+            .arg(shell_quote(pair_id));
+        json_over_ssh(&mut c, Some(&payload))?;
+        Ok(())
+    }
+}
+
+pub struct SyncOpts {
+    pub freshness: u64,
+    pub dry_run: bool,
+    pub backup_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Default, serde::Serialize)]
+pub struct SyncCounts {
+    pub ff_to_a: usize,
+    pub ff_to_b: usize,
+    pub copy_to_a: usize,
+    pub copy_to_b: usize,
+    pub conflicts: usize,
+    pub noop: usize,
+}
+
+#[derive(Debug)]
+pub struct SyncOutcome {
+    pub counts: SyncCounts,
+    pub a: sync::ApplyReport,
+    pub b: sync::ApplyReport,
+    pub backup_id: Option<String>,
+}
+
+fn plan_counts(plan: &[sync::PlannedMember]) -> SyncCounts {
+    let mut c = SyncCounts::default();
+    for pm in plan {
+        match &pm.action {
+            sync::Action::FastForwardToA { .. } => c.ff_to_a += 1,
+            sync::Action::FastForwardToB { .. } => c.ff_to_b += 1,
+            sync::Action::CopyToA => c.copy_to_a += 1,
+            sync::Action::CopyToB => c.copy_to_b += 1,
+            sync::Action::ConflictWinnerA { .. } => c.conflicts += 1,
+            _ => c.noop += 1,
+        }
+    }
+    c
+}
+
+fn probe_detail(p: &sync::ProbeReport) -> String {
+    let mut items = p.processes.clone();
+    items.extend(
+        p.fresh_wal
+            .iter()
+            .map(|w| w.rsplit('/').next().unwrap_or(w).to_string()),
+    );
+    items.extend(
+        p.fresh_members
+            .iter()
+            .map(|m| m.rsplit('/').next().unwrap_or(m).to_string()),
+    );
+    items.dedup();
+    items.join(", ")
+}
+
+/// the sync core, transport-injected (ssh in production, in-process in
+/// tests). Order: live-gate BOTH hosts, take the lease, inventory both,
+/// plan once, stage bytes both directions, apply A then B, commit A's
+/// authoritative ledger to both. A member that changed between inventory
+/// and apply is skipped by the pre-state guard and its base does not
+/// advance — the next run re-plans it from the old base.
+pub fn perform_sync(
+    ctx: &Ctx,
+    pair: &sync::Pair,
+    list: &[Box<dyn Adapter>],
+    tr: &dyn SyncTransport,
+    opts: &SyncOpts,
+) -> Result<SyncOutcome> {
+    let agents_arg: Option<String> = pair.agents.as_ref().map(|a| a.join(","));
+    let agents = agents_arg.as_deref();
+    let pid = sync::pair_id(pair);
+
+    // 1. live gates on both hosts — a hot host refuses the whole run
+    let pa = sync::probe(ctx, list, &pair.local, opts.freshness);
+    if pa.hot {
+        bail!(
+            "{}",
+            t!("sync.err_hot_local", detail = probe_detail(&pa).as_str())
+        );
+    }
+    let pb = tr.probe(&pair.remote_path, opts.freshness, agents)?;
+    if pb.hot {
+        bail!(
+            "{}",
+            t!(
+                "sync.err_hot_remote",
+                host = pair.remote_host.as_str(),
+                detail = probe_detail(&pb).as_str()
+            )
+        );
+    }
+
+    // 2. the pair lease: a second initiator on this host is refused
+    let lease = sync::Lease::acquire(ctx, &pid, 600)?
+        .ok_or_else(|| anyhow::anyhow!("{}", t!("sync.err_lease_held")))?;
+    let outcome = match sync_locked(ctx, pair, list, tr, agents, &pid, opts) {
+        Ok(o) => o,
+        Err(e) => {
+            lease.release();
+            return Err(e);
+        }
+    };
+    lease.release();
+    Ok(outcome)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sync_locked(
+    ctx: &Ctx,
+    pair: &sync::Pair,
+    list: &[Box<dyn Adapter>],
+    tr: &dyn SyncTransport,
+    agents: Option<&str>,
+    pid: &str,
+    opts: &SyncOpts,
+) -> Result<SyncOutcome> {
+    let mut ledger = sync::Ledger::load(ctx, pid)?;
+    let inv_a = sync::inventory(ctx, list, &pair.local, &pair.remote_path, &ledger);
+    let inv_b = tr.inventory(&pair.remote_path, &pair.local, pid, agents)?;
+    let plan = sync::plan(&inv_a, &inv_b, &ledger.state);
+    let counts = plan_counts(&plan);
+    if opts.dry_run {
+        return Ok(SyncOutcome {
+            counts,
+            a: sync::ApplyReport::default(),
+            b: sync::ApplyReport::default(),
+            backup_id: None,
+        });
+    }
+    let run_id = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+
+    // stage both directions: A needs B's bytes for its incoming rows,
+    // B needs A's for its own (read straight off this host's state tree)
+    let need_a: Vec<String> = plan
+        .iter()
+        .filter(|pm| {
+            matches!(
+                pm.action,
+                sync::Action::FastForwardToA { .. } | sync::Action::CopyToA
+            )
+        })
+        .map(|pm| pm.member.clone())
+        .collect();
+    let need_b: Vec<String> = plan
+        .iter()
+        .filter(|pm| {
+            matches!(
+                pm.action,
+                sync::Action::FastForwardToB { .. }
+                    | sync::Action::CopyToB
+                    | sync::Action::ConflictWinnerA { .. }
+            )
+        })
+        .map(|pm| pm.member.clone())
+        .collect();
+    let staging_a = tr.pack(&pair.remote_path, &need_a, agents)?;
+    let mut staging_b = sync::Staging::new();
+    for m in &need_b {
+        if let Some(raw) = sync::read_member(ctx, list, m) {
+            staging_b.insert(m.clone(), raw);
+        }
+    }
+
+    // apply A (in-process), then B (over the transport)
+    let mut backup = backup::Backup::new(
+        &opts
+            .backup_dir
+            .clone()
+            .unwrap_or_else(|| ctx.default_backup_dir()),
+        &ReplaceSpec::new(&pair.remote_path, &pair.local)?,
+        list.iter().map(|a| a.name().to_string()).collect(),
+        false,
+    );
+    // the journal exists on disk BEFORE the first placement, exactly
+    // like receive: a kill mid-apply leaves a reversible record
+    backup.save()?;
+    let ra = sync::apply_half(
+        ctx,
+        list,
+        &pair.local,
+        &pair.remote_path,
+        &plan,
+        true,
+        &staging_a,
+        &mut ledger.state,
+        &mut backup,
+        &run_id,
+    )?;
+    backup.save()?;
+    let rb = tr.apply(
+        &pair.remote_path,
+        &pair.local,
+        pid,
+        &run_id,
+        false,
+        &plan,
+        &staging_b,
+        agents,
+    )?;
+
+    // commit: A computes the authoritative ledger (only rows the
+    // receiving side actually applied may advance), then ships it to B
+    let confirmed = sync::confirmed_members(&plan, &ra.applied, &rb.applied);
+    sync::commit_plan(&mut ledger.state, &plan, &confirmed, &rb.siblings);
+    ledger.save()?;
+    tr.commit(pid, &ledger.state)?;
+
+    Ok(SyncOutcome {
+        counts,
+        a: ra,
+        b: rb,
+        backup_id: Some(backup.manifest.id),
+    })
+}
+
+fn cmd_sync(
+    ctx: &Ctx,
+    name: &str,
+    freshness: u64,
+    dry_run: bool,
+    backup_dir: Option<PathBuf>,
+    json: bool,
+) -> Result<()> {
+    let mut pair = sync::pair_get(ctx, name)?;
+    pair.local = crate::ctx::path_str(&crate::spec::absolutish(Path::new(&pair.local)));
+    if !Path::new(&pair.local).is_dir() {
+        bail!("{}", t!("sync.err_no_local", path = pair.local.as_str()));
+    }
+    let names: Option<Vec<String>> = pair.agents.clone();
+    let list = adapters::get_adapters(names.as_deref())?;
+    let tr = SshSyncTransport {
+        host: &pair.remote_host,
+    };
+    let out = perform_sync(
+        ctx,
+        &pair,
+        &list,
+        &tr,
+        &SyncOpts {
+            freshness,
+            dry_run,
+            backup_dir,
+        },
+    )?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "pair": pair.name,
+                "dryRun": dry_run,
+                "counts": out.counts,
+                "a": out.a,
+                "b": out.b,
+                "backupId": out.backup_id,
+            }))?
+        );
+    } else {
+        println!(
+            "{}",
+            t!(
+                "sync.plan_summary",
+                ff_a = out.counts.ff_to_a,
+                ff_b = out.counts.ff_to_b,
+                copy_ab = out.counts.copy_to_b,
+                copy_ba = out.counts.copy_to_a,
+                conflict = out.counts.conflicts,
+                noop = out.counts.noop
+            )
+        );
+        if dry_run {
+            println!("{}", t!("mv.dry_run"));
+        } else {
+            let a = &out.a;
+            let b = &out.b;
+            println!(
+                "{}",
+                t!(
+                    "sync.summary",
+                    placed = a.placed + b.placed,
+                    replaced = a.replaced + b.replaced,
+                    conflicts = a.conflicts_local_kept + b.conflicts_local_kept,
+                    skipped = a.skipped + b.skipped
+                )
+            );
+            if let Some(id) = &out.backup_id {
+                println!("{}: movara undo --id {}", t!("mv.undo"), id);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn cmd_sync_pair(ctx: &Ctx, cmd: PairCmd) -> Result<()> {
+    match cmd {
+        PairCmd::Add {
+            name,
+            local,
+            host,
+            remote,
+            with_files,
+            agents,
+        } => {
+            let p = sync::Pair {
+                name: name.clone(),
+                local: crate::ctx::path_str(&crate::spec::absolutish(&local)),
+                remote_host: host.clone(),
+                remote_path: remote.clone(),
+                with_files,
+                agents: agents.map(|a| a.split(',').map(|s| s.trim().to_string()).collect()),
+            };
+            sync::pair_add(ctx, &p)?;
+            println!(
+                "{}",
+                t!(
+                    "sync.pair_added",
+                    name = name.as_str(),
+                    local = p.local.as_str(),
+                    host = host.as_str(),
+                    remote = p.remote_path.as_str()
+                )
+            );
+            Ok(())
+        }
+        PairCmd::List { json } => {
+            let pairs = sync::pair_list(ctx)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&pairs)?);
+                return Ok(());
+            }
+            if pairs.is_empty() {
+                println!("{}", t!("sync.pairs_none"));
+                return Ok(());
+            }
+            for p in pairs {
+                println!(
+                    "{}",
+                    t!(
+                        "sync.pair_row",
+                        name = p.name.as_str(),
+                        local = p.local.as_str(),
+                        host = p.remote_host.as_str(),
+                        remote = p.remote_path.as_str()
+                    )
+                );
+            }
+            Ok(())
+        }
+        PairCmd::Remove { name } => {
+            if sync::pair_remove(ctx, &name)? {
+                println!("{}", t!("sync.pair_removed", name = name.as_str()));
+                Ok(())
+            } else {
+                bail!("{}", t!("sync.err_unknown_pair", name = name.as_str()));
+            }
+        }
+    }
+}
+
+fn cmd_sync_status(ctx: &Ctx, name: &str, json: bool) -> Result<()> {
+    let pair = sync::pair_get(ctx, name)?;
+    let ledger = sync::Ledger::load(ctx, &sync::pair_id(&pair))?;
+    let siblings = ledger
+        .state
+        .members
+        .values()
+        .filter(|r| r.sibling.is_some())
+        .count();
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "name": pair.name,
+                "local": pair.local,
+                "remoteHost": pair.remote_host,
+                "remotePath": pair.remote_path,
+                "withFiles": pair.with_files,
+                "lastSync": ledger.state.last_sync,
+                "members": ledger.state.members.len(),
+                "siblings": siblings,
+            }))?
+        );
+        return Ok(());
+    }
+    match &ledger.state.last_sync {
+        None => println!(
+            "{}",
+            t!(
+                "sync.status_none",
+                name = pair.name.as_str(),
+                local = pair.local.as_str(),
+                host = pair.remote_host.as_str(),
+                remote = pair.remote_path.as_str()
+            )
+        ),
+        Some(when) => println!(
+            "{}",
+            t!(
+                "sync.status_line",
+                name = pair.name.as_str(),
+                local = pair.local.as_str(),
+                host = pair.remote_host.as_str(),
+                remote = pair.remote_path.as_str(),
+                when = when.as_str(),
+                members = ledger.state.members.len(),
+                siblings = siblings
+            )
+        ),
+    }
+    Ok(())
+}
+
+fn agent_adapters(agents: Option<&str>) -> Result<Vec<Box<dyn Adapter>>> {
+    let names: Option<Vec<String>> =
+        agents.map(|a| a.split(',').map(|s| s.trim().to_string()).collect());
+    adapters::get_adapters(names.as_deref())
+}
+
+fn cmd_sync_agent(ctx: &Ctx, cmd: AgentCmd) -> Result<()> {
+    match cmd {
+        AgentCmd::Probe {
+            project,
+            freshness,
+            agents,
+        } => {
+            let list = agent_adapters(agents.as_deref())?;
+            let rep = sync::probe(ctx, &list, &project, freshness);
+            println!("{}", serde_json::to_string_pretty(&rep)?);
+            Ok(())
+        }
+        AgentCmd::Inventory {
+            project,
+            other,
+            pair,
+            agents,
+        } => {
+            let list = agent_adapters(agents.as_deref())?;
+            let ledger = sync::Ledger::load(ctx, &pair)?;
+            let inv = sync::inventory(ctx, &list, &project, &other, &ledger);
+            println!("{}", serde_json::to_string_pretty(&inv)?);
+            Ok(())
+        }
+        AgentCmd::Pack { project: _, agents } => {
+            let list = agent_adapters(agents.as_deref())?;
+            let members: Vec<String> = serde_json::from_reader(std::io::stdin())?;
+            use base64::Engine as _;
+            let mut out = serde_json::Map::new();
+            for m in &members {
+                if let Some(raw) = sync::read_member(ctx, &list, m) {
+                    out.insert(
+                        m.clone(),
+                        serde_json::Value::String(
+                            base64::engine::general_purpose::STANDARD.encode(raw),
+                        ),
+                    );
+                }
+            }
+            println!("{}", serde_json::Value::Object(out));
+            Ok(())
+        }
+        AgentCmd::Apply {
+            project,
+            other,
+            pair,
+            side,
+            run,
+            agents,
+        } => {
+            if side != "a" && side != "b" {
+                bail!("{}", t!("sync.err_side"));
+            }
+            let list = agent_adapters(agents.as_deref())?;
+            let input: serde_json::Value = serde_json::from_reader(std::io::stdin())?;
+            let plan: Vec<sync::PlannedMember> =
+                serde_json::from_value(input.get("plan").cloned().unwrap_or_default())?;
+            use base64::Engine as _;
+            let mut staging = sync::Staging::new();
+            if let Some(ws) = input.get("staging").and_then(|v| v.as_object()) {
+                for (m, b64) in ws {
+                    let s = b64.as_str().context("staging: non-string entry")?;
+                    staging.insert(
+                        m.clone(),
+                        base64::engine::general_purpose::STANDARD.decode(s)?,
+                    );
+                }
+            }
+            let mut ledger = sync::Ledger::load(ctx, &pair)?;
+            let mut backup = backup::Backup::new(
+                &ctx.default_backup_dir(),
+                &ReplaceSpec::new(&other, &project)?,
+                list.iter().map(|a| a.name().to_string()).collect(),
+                false,
+            );
+            backup.save()?;
+            let rep = sync::apply_half(
+                ctx,
+                &list,
+                &project,
+                &other,
+                &plan,
+                side == "a",
+                &staging,
+                &mut ledger.state,
+                &mut backup,
+                &run,
+            );
+            // persist sibling records + the journal even on partial
+            // failure: whatever was applied must stay reversible
+            ledger.save()?;
+            backup.save()?;
+            println!("{}", serde_json::to_string_pretty(&rep?)?);
+            Ok(())
+        }
+        AgentCmd::Commit { pair } => {
+            let state: sync::LedgerState = serde_json::from_reader(std::io::stdin())?;
+            sync::Ledger {
+                dir: ctx.home.join(".movara").join("sync").join(&pair),
+                state,
+            }
+            .save()?;
+            println!("{{\"ok\":true}}");
+            Ok(())
+        }
+    }
 }

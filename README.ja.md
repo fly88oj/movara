@@ -219,6 +219,12 @@ pre-commit install                        # ローカルフック（CI と同一
 ```
 
 詳細は [CONTRIBUTING.md](CONTRIBUTING.md)、[CHANGELOG.md](CHANGELOG.md)、
+> **クロスホスト同期 (sync) は次期リリース向けに開発中です** —
+> [CHANGELOG.md](CHANGELOG.md) の Unreleased セクションを参照してください。
+
+> **クロスホスト同期 (sync) は次期リリース向けに開発中です** —
+> [CHANGELOG.md](CHANGELOG.md) の Unreleased セクションを参照してください。
+
 [SECURITY.md](SECURITY.md)、[docs/research.md](docs/research.md) を参照。
 
 ## ライセンス

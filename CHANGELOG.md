@@ -8,6 +8,12 @@ List items must each be a single source line (no hard wrapping): the
 release workflow extracts this file verbatim as the GitHub Release body,
 and the release page renders every newline as a forced break.
 
+## [Unreleased]
+
+### Added
+
+- **Cross-host sync, end to end (S1 of the sync design)**: a persistent pair store (`~/.movara/sync-pairs.json`; pair identity is the endpoint tuple — duplicate registrations are refused), the per-pair sync ledger with content-addressed bases and the symmetric base-advance rule (rows the receiving side failed to apply never advance), the pure three-way merge planner (A==B no-op fixpoint row, per-side fast-forward carrying the winner's hash, deterministic A-side conflict winner with planner-recorded sibling copies that survive as union members, deletions never propagated), the path-canonical sync hash — both hosts' project-path forms (raw/forward-slash/JSON-escaped/msys plus the derived bucket tokens) are boundary-replaced with a marker before the normalized hash (BOM-strip, CRLF→LF, NFC), so asymmetric pairs (~/abc vs ~/projects/abc) converge instead of fast-forward ping-ponging — the member inventory keyed by canonical `agent/kind/rel` identities (sqlite members excluded until the row-merge layer), the apply half with live-file pre-state guards, form-aware rebasing of incoming bytes onto the receiving host's paths, conflict-sibling materialization/reuse and full undo journaling, the cross-host liveness probe (agent process names via the new `process_names()` adapter hook, fresh WAL sidecars, freshness-window state files) and the pair lease (TTL + renewal + expiry takeover); on top of it the `movara sync <name>` / `sync pair add|list|remove` / `sync status` CLI driving the hidden `sync-agent` protocol over ssh (probe/inventory/pack/apply/commit, base64 staging), with the same core transport-injected and tested in-process. Fourteen new in-process tests pin the convergence property, the path-asymmetry no-op, rebase landing, sibling survival and ledger agreement, the pre-state guard refusal, the orchestration gates and the remote-hot refusal.
+
 ## [1.2.0] - 2026-09-20
 
 ### Added

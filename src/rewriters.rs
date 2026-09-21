@@ -115,54 +115,40 @@ pub(crate) fn strip_bom(raw: &[u8]) -> &[u8] {
     raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(raw)
 }
 
-pub fn rewrite_json_file(path: &Path, spec: &ReplaceSpec, backup: &mut Backup) -> Result<bool> {
-    let raw = fs::read(path)?;
-    if !spec.maybe_contains(&raw) {
-        return Ok(false);
+/// In-memory JSON core: parse (BOM-tolerant), rewrite identity fields,
+/// pretty-print back. None = nothing referenced the spec (or the bytes
+/// are not JSON — the caller decides whether to fall back to text).
+pub fn json_core(raw: &[u8], spec: &ReplaceSpec) -> Result<Option<Vec<u8>>> {
+    if !spec.maybe_contains(raw) {
+        return Ok(None);
     }
-    let mut obj: Value = match serde_json::from_slice(strip_bom(&raw)) {
+    let mut obj: Value = match serde_json::from_slice(strip_bom(raw)) {
         Ok(v) => v,
-        Err(_) => return Ok(false),
+        Err(_) => return Ok(None),
     };
     let before = serde_json::to_string(&obj)?;
     rewrite_json_value(&mut obj, spec);
     let after = serde_json::to_string(&obj)?;
     if before == after {
-        return Ok(false);
+        return Ok(None);
     }
-    backup.record_file(path)?;
-    if backup.dry_run {
-        return Ok(true);
-    }
-    let text = serde_json::to_string_pretty(&obj)?;
-    write_atomic(path, text.as_bytes())?;
-    Ok(true)
+    Ok(Some(serde_json::to_string_pretty(&obj)?.into_bytes()))
 }
 
-/// Line-wise JSON rewrite; with `deep` also whole-line boundary replace for
-/// non-JSON lines. JSON lines get identity-field rewriting always; with
-/// `deep` the reserialized line is additionally boundary-replaced (covers
-/// path mentions inside message content). A single `\r` before the `\n`
-/// (CRLF files) is preserved; invalid UTF-8 files are left untouched.
-pub fn rewrite_jsonl_file(
-    path: &Path,
-    spec: &ReplaceSpec,
-    backup: &mut Backup,
-    deep: bool,
-) -> Result<bool> {
-    let raw = fs::read(path)?;
-    if !spec.maybe_contains(&raw) {
-        return Ok(false);
+/// In-memory line-wise JSONL core; with `deep` also whole-line boundary
+/// replace for non-JSON lines. None = unchanged (or invalid UTF-8, which
+/// the file wrapper leaves untouched as before).
+pub fn jsonl_core(raw: &[u8], spec: &ReplaceSpec, deep: bool) -> Result<Option<String>> {
+    if !spec.maybe_contains(raw) {
+        return Ok(None);
     }
-    let text = match String::from_utf8(raw) {
+    let text = match String::from_utf8(raw.to_vec()) {
         Ok(t) => t,
-        Err(_) => return Ok(false),
+        Err(_) => return Ok(None),
     };
     let mut out = String::with_capacity(text.len());
     let mut changed = false;
     for line in text.split_inclusive('\n') {
-        // strip the newline, then at most ONE carriage return (a CRLF line
-        // ending); both are re-appended verbatim after rewriting
         let (body, eol) = match line.strip_suffix('\n') {
             Some(b) => (b, "\n"),
             None => (line, ""),
@@ -194,39 +180,64 @@ pub fn rewrite_jsonl_file(
         out.push_str(cr);
         out.push_str(eol);
     }
-    if !changed {
-        return Ok(false);
+    Ok(changed.then_some(out))
+}
+
+/// In-memory plain-text core: boundary-aware replace; None = unchanged,
+/// binary or invalid UTF-8.
+pub fn text_core(raw: &[u8], spec: &ReplaceSpec) -> Option<String> {
+    if !spec.maybe_contains(raw) || raw.contains(&0u8) {
+        return None;
     }
+    let text = String::from_utf8(raw.to_vec()).ok()?;
+    let new_text = spec.replace(&text);
+    (new_text != text).then_some(new_text)
+}
+
+pub fn rewrite_json_file(path: &Path, spec: &ReplaceSpec, backup: &mut Backup) -> Result<bool> {
+    let new = json_core(&fs::read(path)?, spec)?;
+    let Some(new) = new else {
+        return Ok(false);
+    };
     backup.record_file(path)?;
     if backup.dry_run {
         return Ok(true);
     }
-    write_atomic(path, out.as_bytes())?;
+    write_atomic(path, &new)?;
+    Ok(true)
+}
+
+pub fn rewrite_jsonl_file(
+    path: &Path,
+    spec: &ReplaceSpec,
+    backup: &mut Backup,
+    deep: bool,
+) -> Result<bool> {
+    let raw = fs::read(path)?;
+    let new = jsonl_core(&raw, spec, deep)?;
+    let Some(new) = new else {
+        return Ok(false);
+    };
+    backup.record_file(path)?;
+    if backup.dry_run {
+        return Ok(true);
+    }
+    write_atomic(path, new.as_bytes())?;
     Ok(true)
 }
 
 /// Boundary-aware replace inside a plain text file.
 pub fn rewrite_text_file(path: &Path, spec: &ReplaceSpec, backup: &mut Backup) -> Result<bool> {
     let raw = fs::read(path)?;
-    if !spec.maybe_contains(&raw) {
+    let new = text_core(&raw, spec);
+    let Some(new) = new else {
         return Ok(false);
-    }
-    if raw.contains(&0u8) {
-        return Ok(false); // binary
-    }
-    let text = match String::from_utf8(raw) {
-        Ok(t) => t,
-        Err(_) => return Ok(false),
     };
-    let new_text = spec.replace(&text);
-    if new_text == text {
-        return Ok(false);
-    }
     backup.record_file(path)?;
     if backup.dry_run {
         return Ok(true);
     }
-    write_atomic(path, new_text.as_bytes())?;
+    write_atomic(path, new.as_bytes())?;
     Ok(true)
 }
 

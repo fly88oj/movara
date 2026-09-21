@@ -26,6 +26,7 @@ pub mod protobuf;
 pub mod rewriters;
 pub mod spec;
 pub mod sqlite;
+pub mod sync;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

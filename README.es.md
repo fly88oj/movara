@@ -223,6 +223,9 @@ pre-commit install                        # ganchos locales (idénticos a CI)
 ```
 
 Véase [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md),
+> **La sincronización entre hosts está en desarrollo** para el próximo
+> lanzamiento; véase la sección Unreleased de [CHANGELOG.md](CHANGELOG.md).
+
 [SECURITY.md](SECURITY.md) y [docs/research.md](docs/research.md).
 
 ## Licencia
