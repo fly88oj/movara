@@ -138,7 +138,7 @@ impl Adapter for CodexAdapter {
                 let con = sqlite::open_rw(&db)?;
                 super::rewrite_pair(
                     &con,
-                    &spec.like_pattern(),
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"cwd\" FROM \"threads\" \
                      WHERE \"cwd\" LIKE ?",

@@ -79,6 +79,10 @@ impl Adapter for OpencodeAdapter {
         vec![ctx.d("opencode")]
     }
 
+    fn root_kinds(&self) -> Vec<crate::ctx::RootKind> {
+        vec![crate::ctx::RootKind::Data]
+    }
+
     fn scan(&self, ctx: &Ctx, spec: &ReplaceSpec) -> Vec<Finding> {
         let mut out = Vec::new();
         let db = self.db(ctx);
@@ -147,13 +151,12 @@ impl Adapter for OpencodeAdapter {
         let db = self.db(ctx);
         if db.is_file() {
             let legacy_pid = self.path_derived_id(ctx, spec);
-            let pat = spec.like_pattern();
             backup.record_db(&db)?;
             if !backup.dry_run {
                 let con = sqlite::open_rw(&db)?;
                 rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"worktree\" FROM \"project\" \
                      WHERE \"worktree\" LIKE ?",
@@ -161,7 +164,7 @@ impl Adapter for OpencodeAdapter {
                 )?;
                 rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"directory\" FROM \"workspace\" \
                      WHERE \"directory\" LIKE ?",
@@ -170,7 +173,7 @@ impl Adapter for OpencodeAdapter {
                 )?;
                 rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"directory\" FROM \"session\" \
                      WHERE \"directory\" LIKE ?",
@@ -178,7 +181,7 @@ impl Adapter for OpencodeAdapter {
                 )?;
                 rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"path\" FROM \"session\" \
                      WHERE \"path\" LIKE ?",
@@ -186,7 +189,7 @@ impl Adapter for OpencodeAdapter {
                 )?;
                 rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"project_id\",\"directory\" \
                      FROM \"project_directory\" WHERE \"directory\" LIKE ?",
@@ -198,7 +201,7 @@ impl Adapter for OpencodeAdapter {
                 if deep {
                     let _ = rewrite_pair(
                         &con,
-                        &pat,
+                        &spec.like_patterns(),
                         spec,
                         "SELECT \"id\",\"data\" FROM \"event\" \
                      WHERE \"data\" LIKE ?",
@@ -206,7 +209,7 @@ impl Adapter for OpencodeAdapter {
                     );
                     let _ = rewrite_pair(
                         &con,
-                        &pat,
+                        &spec.like_patterns(),
                         spec,
                         "SELECT \"id\",\"data\" FROM \"message\" \
                      WHERE \"data\" LIKE ?",

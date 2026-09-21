@@ -108,12 +108,19 @@ pub fn rewrite_json_value(v: &mut Value, spec: &ReplaceSpec) {
 }
 
 /// Parse JSON, rewrite identity fields + path-like keys, write back.
+/// strip a leading UTF-8 BOM (serde_json rejects it outright; Windows
+/// editors prepend it — today the rewriters silently skip such files,
+/// which is a behavior bug this fixes)
+pub(crate) fn strip_bom(raw: &[u8]) -> &[u8] {
+    raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(raw)
+}
+
 pub fn rewrite_json_file(path: &Path, spec: &ReplaceSpec, backup: &mut Backup) -> Result<bool> {
     let raw = fs::read(path)?;
     if !spec.maybe_contains(&raw) {
         return Ok(false);
     }
-    let mut obj: Value = match serde_json::from_slice(&raw) {
+    let mut obj: Value = match serde_json::from_slice(strip_bom(&raw)) {
         Ok(v) => v,
         Err(_) => return Ok(false),
     };
@@ -166,7 +173,9 @@ pub fn rewrite_jsonl_file(
         };
         let mut new_body = body.to_string();
         if body.starts_with('{') && body.ends_with('}') {
-            if let Ok(mut obj) = serde_json::from_str::<Value>(body) {
+            if let Ok(mut obj) =
+                serde_json::from_str::<Value>(body.strip_prefix('\u{feff}').unwrap_or(body))
+            {
                 let before = serde_json::to_string(&obj)?;
                 rewrite_json_value(&mut obj, spec);
                 let after = serde_json::to_string(&obj)?;

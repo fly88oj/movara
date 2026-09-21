@@ -49,6 +49,10 @@ impl Adapter for ZedAdapter {
         vec![ctx.d("zed")]
     }
 
+    fn root_kinds(&self) -> Vec<crate::ctx::RootKind> {
+        vec![crate::ctx::RootKind::Data]
+    }
+
     fn scan(&self, ctx: &Ctx, spec: &ReplaceSpec) -> Vec<Finding> {
         let mut out = Vec::new();
         let pat = spec.like_pattern();
@@ -127,7 +131,6 @@ impl Adapter for ZedAdapter {
         _deep: bool,
     ) -> Result<Vec<Finding>> {
         let mut actions = Vec::new();
-        let pat = spec.like_pattern();
         let tdb = self.threads_db(ctx);
         if tdb.is_file() {
             backup.record_db(&tdb)?;
@@ -135,7 +138,7 @@ impl Adapter for ZedAdapter {
                 let con = sqlite::open_rw(&tdb)?;
                 let total = super::rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"folder_paths\" FROM \"threads\" \
                      WHERE \"folder_paths\" LIKE ?",
@@ -161,7 +164,7 @@ impl Adapter for ZedAdapter {
                 // column separately via the shared (pk, value) walker
                 let mut total = super::rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"thread_id\",\"folder_paths\" \
                      FROM \"sidebar_threads\" WHERE \"folder_paths\" LIKE ?",
@@ -170,7 +173,7 @@ impl Adapter for ZedAdapter {
                 )?;
                 total += super::rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"thread_id\",\"main_worktree_paths\" \
                      FROM \"sidebar_threads\" \
@@ -180,7 +183,7 @@ impl Adapter for ZedAdapter {
                 )?;
                 total += super::rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"absolute_path\" \
                      FROM \"trusted_worktrees\" \

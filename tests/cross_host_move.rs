@@ -19,7 +19,7 @@ fn target_ctx(tag: &str) -> (Ctx, PathBuf) {
     let raw = std::env::temp_dir().join(format!("movara-mv2-{}-{}", tag, std::process::id()));
     let _ = fs::remove_dir_all(&raw);
     fs::create_dir_all(&raw).unwrap();
-    let tmp = fs::canonicalize(&raw).unwrap_or(raw);
+    let tmp = movara::ctx::de_verbatim(&fs::canonicalize(&raw).unwrap_or(raw));
     let ctx = Ctx {
         home: tmp.clone(),
         config_home: tmp.join(".config"),
@@ -53,8 +53,7 @@ fn do_move(
         state_only,
     };
     let report = archive::run_export_into(&fx.ctx, &adapters(), &opts, writer, None).unwrap();
-    let file = fs::File::open(&arch).unwrap();
-    let doc = movara::cli::receive_core(ctx_b, dst, file).unwrap();
+    let doc = movara::cli::receive_core(ctx_b, dst, fs::File::open(&arch).unwrap()).unwrap();
     assert!(doc["undo_id"].as_str().is_some());
     report
 }
@@ -79,7 +78,7 @@ fn seed_project(fx: &Fixture) {
 }
 
 fn read(p: &Path) -> String {
-    fs::read_to_string(p).unwrap()
+    fs::read_to_string(p).unwrap_or_else(|e| panic!("DBG read failed {:?}: {e}", p))
 }
 
 #[test]
@@ -87,7 +86,7 @@ fn move_places_project_and_rebases_state() {
     let fx = Fixture::new("xh-e2e");
     seed_project(&fx);
     let (ctx_b, tmp_b) = target_ctx("xh-e2e");
-    let dst = ctx_b.home.join("proj/cba");
+    let dst = ctx_b.home.join("proj").join("cba");
     let report = do_move(&fx, &ctx_b, &dst, false);
     // project tree: code + git + memory carried, caches not
     assert!(dst.join("main.rs").is_file());
@@ -143,7 +142,7 @@ fn cleanup_removes_state_keeps_shared_and_restores_via_undo() {
     let fx = Fixture::new("xh-cl");
     seed_project(&fx);
     let (ctx_b, tmp_b) = target_ctx("xh-cl");
-    let dst = ctx_b.home.join("proj/cba");
+    let dst = ctx_b.home.join("proj").join("cba");
     let report = do_move(&fx, &ctx_b, &dst, false);
     // cleanup, exactly as perform_move drives it
     let mut bk = movara::backup::Backup::new(
@@ -203,7 +202,7 @@ fn state_only_move_carries_memory_not_code() {
     let fx = Fixture::new("xh-so");
     seed_project(&fx);
     let (ctx_b, tmp_b) = target_ctx("xh-so");
-    let dst = ctx_b.home.join("proj/cba");
+    let dst = ctx_b.home.join("proj").join("cba");
     let report = do_move(&fx, &ctx_b, &dst, true);
     assert!(
         dst.join("CLAUDE.md").is_file(),
@@ -240,15 +239,15 @@ fn same_path_move_is_verbatim() {
         use movara::archive::ArchiveManifest;
         let mut w = archive::ArchiveWriter::create(&arch).unwrap();
         let enc = movara::encodings::dash_encode(&dst_s);
-        w.add_dir(&format!("data/claude/.claude/projects/{}", enc))
+        w.add_dir(&format!("data/claude/home/.claude/projects/{}", enc))
             .unwrap();
         w.add_file(
-            &format!("data/claude/.claude/projects/{}/s.jsonl", enc),
+            &format!("data/claude/home/.claude/projects/{}/s.jsonl", enc),
             format!("{{\"cwd\":\"{}\"}}\n", dst_s).as_bytes(),
         )
         .unwrap();
         let manifest = ArchiveManifest {
-            format: 1,
+            format: movara::archive::FORMAT,
             created: String::new(),
             host: "t".into(),
             os: "linux".into(),
@@ -282,7 +281,7 @@ fn same_path_move_is_verbatim() {
 #[test]
 fn truncated_stream_places_nothing() {
     let (ctx_b, tmp_b) = target_ctx("xh-tr");
-    let dst = ctx_b.home.join("proj/cba");
+    let dst = ctx_b.home.join("proj").join("cba");
     let garbage = std::io::Cursor::new(b"not-a-gzip-stream".to_vec());
     let res = movara::cli::receive_core(&ctx_b, &dst, garbage);
     assert!(res.is_err(), "garbage stream must fail");
@@ -294,7 +293,7 @@ fn truncated_stream_places_nothing() {
 #[test]
 fn occupied_destination_is_refused() {
     let (ctx_b, tmp_b) = target_ctx("xh-oc");
-    let dst = ctx_b.home.join("proj/cba");
+    let dst = ctx_b.home.join("proj").join("cba");
     fs::create_dir_all(&dst).unwrap();
     fs::write(dst.join("occupant"), "x").unwrap();
     assert!(
@@ -310,7 +309,7 @@ fn parent_dir_escape_member_is_refused() {
     // a crafted archive with a `..` member: tar unpack refuses it, so
     // receive fails before placing anything
     let (ctx_b, tmp_b) = target_ctx("xh-esc");
-    let dst = ctx_b.home.join("proj/cba");
+    let dst = ctx_b.home.join("proj").join("cba");
     let arch = tmp_b.join("evil.tar.gz");
     {
         let f = fs::File::create(&arch).unwrap();

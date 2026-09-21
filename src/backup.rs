@@ -175,19 +175,30 @@ impl Backup {
 }
 
 fn absolute(p: &Path) -> PathBuf {
-    if p.is_absolute() {
+    let joined = if p.is_absolute() {
         p.to_path_buf()
     } else {
         std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
             .join(p)
-    }
+    };
+    crate::ctx::de_verbatim(&joined)
 }
 
 fn backup_rel(path: &Path) -> Result<String> {
-    let rel = path
-        .strip_prefix(std::path::Component::RootDir.as_os_str())
-        .unwrap_or(path);
+    // strip the root AND any drive prefix (C:\): a POSIX-only strip
+    // leaves `C:\Users\...` as the "rel", and the ':' lands inside
+    // backup filenames (invalid on NTFS)
+    let mut comps = path.components();
+    let mut rel = path;
+    while let Some(c) = comps.next() {
+        match c {
+            std::path::Component::Prefix(_) | std::path::Component::RootDir => {
+                rel = comps.as_path()
+            }
+            _ => break,
+        }
+    }
     let s = rel.to_string_lossy().into_owned();
     if Path::new(&s)
         .components()

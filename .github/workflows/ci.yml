@@ -42,6 +42,10 @@ jobs:
           - os: ubuntu-latest
           - os: macos-latest
             experimental: false
+          - os: windows-latest
+            # S0 cross-platform coverage: junction/BOM/CRLF/rename
+            # fixtures run for real on Windows
+            experimental: false
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental || false }}
     env:

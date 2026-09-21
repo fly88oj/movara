@@ -125,14 +125,13 @@ impl Adapter for ZcodeAdapter {
         let mut actions = Vec::new();
         let db = self.db(ctx);
         if db.is_file() {
-            let pat = spec.like_pattern();
             backup.record_db(&db)?;
             let mut updated = 0usize;
             if !backup.dry_run {
                 let con = sqlite::open_rw(&db)?;
                 updated += super::rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"directory\" FROM \"session\" \
                      WHERE \"directory\" LIKE ?",
@@ -141,7 +140,7 @@ impl Adapter for ZcodeAdapter {
                 )?;
                 updated += super::rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"path\" FROM \"session\" \
                      WHERE \"path\" LIKE ?",
@@ -149,7 +148,7 @@ impl Adapter for ZcodeAdapter {
                 )?;
                 updated += super::rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"id\",\"cwd\" FROM \"workflow_run\" \
                      WHERE \"cwd\" LIKE ?",

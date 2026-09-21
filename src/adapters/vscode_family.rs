@@ -128,7 +128,6 @@ impl VscodeBase {
         if !db.is_file() {
             return Ok(actions);
         }
-        let pat = spec.like_pattern();
         backup.record_db(&db)?;
         if backup.dry_run {
             return Ok(self.scan_itemtable(ctx, spec, label));
@@ -136,7 +135,7 @@ impl VscodeBase {
         let con = sqlite::open_rw(&db)?;
         let total = super::rewrite_pair(
             &con,
-            &pat,
+            &spec.like_patterns(),
             spec,
             "SELECT \"key\",\"value\" FROM \"ItemTable\" \
              WHERE \"value\" LIKE ?",
@@ -226,6 +225,10 @@ impl Adapter for CursorAdapter {
         vec![self.base().ide_db(ctx), ctx.h(".cursor")]
     }
 
+    fn root_kinds(&self) -> Vec<crate::ctx::RootKind> {
+        vec![crate::ctx::RootKind::Config, crate::ctx::RootKind::Home]
+    }
+
     fn scan(&self, ctx: &Ctx, spec: &ReplaceSpec) -> Vec<Finding> {
         let mut out = self.base().scan_itemtable(ctx, spec, self.name());
         // cursorDiskKV
@@ -282,13 +285,12 @@ impl Adapter for CursorAdapter {
         // cursorDiskKV
         let db = self.base().ide_db(ctx);
         if db.is_file() {
-            let pat = spec.like_pattern();
             backup.record_db(&db)?;
             if !backup.dry_run {
                 let con = sqlite::open_rw(&db)?;
                 let total = super::rewrite_pair(
                     &con,
-                    &pat,
+                    &spec.like_patterns(),
                     spec,
                     "SELECT \"key\",\"value\" FROM \"cursorDiskKV\" \
                      WHERE \"value\" LIKE ?",
@@ -435,6 +437,12 @@ macro_rules! codeium_adapter {
 
             fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
                 vec![self.base().ide_db(ctx), (self.codeium().root_fn)(ctx)]
+            }
+
+            fn root_kinds(&self) -> Vec<crate::ctx::RootKind> {
+                // both codeium-style roots are home-direct today
+                // (windsurf ~/.codeium, antigravity ~/.gemini)
+                vec![crate::ctx::RootKind::Config, crate::ctx::RootKind::Home]
             }
 
             fn scan(&self, ctx: &Ctx, spec: &ReplaceSpec) -> Vec<Finding> {

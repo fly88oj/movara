@@ -39,6 +39,16 @@ impl ReplaceSpec {
 
         let mut pairs: Vec<(String, String)> = vec![(old.clone(), new.clone())];
         pairs.extend(encodings::derived_tokens(&old, &new));
+        // cross-separator rules add the FOUR path forms agents actually
+        // store: raw, forward-slash, JSON-escaped (serde_json escapes
+        // `\` but never `/`), and the msys/Git-Bash form Claude Code's
+        // own matcher normalizes to. Same-style pairs keep each form
+        // (form-aware replacement: same-style keeps forms, cross-style
+        // targets the raw form — see form_variants)
+        let (vo, vn) = Self::form_variants(&old, &new);
+        for (o, n) in std::iter::zip(vo, vn) {
+            pairs.push((o, n));
+        }
         pairs.sort_by_key(|(a, _)| std::cmp::Reverse(a.len()));
 
         let needles: Vec<Vec<u8>> = pairs.iter().map(|(a, _)| a.as_bytes().to_vec()).collect();
@@ -129,24 +139,99 @@ impl ReplaceSpec {
         self.needles.iter().any(|n| memmem::find(data, n).is_some())
     }
 
+    /// the FOUR path-form variants agents actually store, as needle→needle
+    /// pairs. Only emitted when either endpoint has a drive-letter prefix
+    /// (any separator form): on POSIX-only rules the variants would be
+    /// no-ops or, worse, match a literal `/c/...` directory that is not a
+    /// Windows alias. Same-style (Windows↔Windows) rules map each form to
+    /// its OWN form; cross-style maps every form into the target's raw
+    /// form. Derived encodings (dash/sha256/…) hash the RAW path only —
+    /// they are identity, not needles, and stay outside this table.
+    fn form_variants(old: &str, new: &str) -> (Vec<String>, Vec<String>) {
+        let drive = |p: &str| {
+            let b = p.as_bytes();
+            b.len() >= 2 && b[1] == b':' && b[0].is_ascii_alphabetic()
+        };
+        if !drive(old) && !drive(new) {
+            return (vec![], vec![]);
+        }
+        let fwd = |p: &str| p.replace('\\', "/");
+        let esc = |p: &str| p.replace('\\', "\\\\");
+        let msys = |p: &str| {
+            let f = fwd(p);
+            // C:/x -> /c/x (drive letter lowercased, colon dropped)
+            let b = f.as_bytes();
+            if b.len() >= 2 && b[1] == b':' {
+                format!("/{}{}", (b[0] as char).to_ascii_lowercase(), &f[2..])
+            } else {
+                f
+            }
+        };
+        let same_style = drive(old) && drive(new);
+        let mut olds = vec![fwd(old), esc(old), msys(old)];
+        let mut news = if same_style {
+            vec![fwd(new), esc(new), msys(new)]
+        } else {
+            vec![new.to_string(); 3]
+        };
+        olds.retain(|o| o != old);
+        news.truncate(olds.len());
+        news.resize(olds.len(), new.to_string());
+        (olds, news)
+    }
+
     /// like_pattern() for SQLite pre-filters (single pair)
     pub fn like_pattern(&self) -> String {
         format!("%{}%", self.old)
     }
+
+    /// LIKE pre-filter patterns matching BOTH the raw and the
+    /// JSON-escaped form (Windows paths stored in JSON columns carry
+    /// doubled backslashes; the single-pattern form misses them). Use
+    /// with `LIKE ? OR LIKE ?` call sites.
+    pub fn like_patterns(&self) -> Vec<String> {
+        let raw = format!("%{}%", self.old);
+        if self.old.contains('\\') {
+            vec![raw, format!("%{}%", self.old.replace('\\', "\\\\"))]
+        } else {
+            vec![raw]
+        }
+    }
 }
 
-/// Parse and validate `--rebase OLD:NEW` rules (the last `:` separates the
-/// pair, so Windows drive letters survive). Refused: `/` sources, identity
-/// pairs, duplicate sources, and chained rules whose source lies under
-/// another rule's target. Returned sorted longest-source-first so that
-/// sequential single-pair passes (import) resolve prefix overlaps correctly.
+/// Parse and validate `--rebase OLD:NEW` rules. Refused: `/` sources,
+/// identity pairs, duplicate sources, and chained rules whose source
+/// lies under another rule's target. Returned sorted longest-source-
+/// first so that sequential single-pair passes (import) resolve prefix
+/// overlaps correctly.
+fn split_rule(r: &str) -> Result<(&str, &str)> {
+    let bytes = r.as_bytes();
+    let mut fallback: Option<(&str, &str)> = None;
+    for (i, b) in bytes.iter().enumerate() {
+        if *b != b':' {
+            continue;
+        }
+        let right = &r[i + 1..];
+        if right.is_empty() {
+            continue;
+        }
+        let root_start = right.starts_with('/')
+            || (right.len() >= 3
+                && right.as_bytes()[1] == b':'
+                && right.as_bytes()[0].is_ascii_alphabetic()
+                && (right.as_bytes()[2] == b'/' || right.as_bytes()[2] == b'\\'));
+        if root_start && !r[..i].is_empty() {
+            return Ok((&r[..i], right));
+        }
+        fallback = Some((&r[..i], right));
+    }
+    fallback.ok_or_else(|| anyhow::anyhow!("{}", t!("spec.err_rule", rule = r)))
+}
+
 pub fn prepare_rules(raw: &[String]) -> Result<Vec<(String, String)>> {
     let mut rules: Vec<(String, String)> = Vec::new();
     for r in raw {
-        let (o, n) = match r.rsplit_once(':') {
-            Some(x) => x,
-            None => anyhow::bail!("{}", t!("spec.err_rule", rule = r.as_str())),
-        };
+        let (o, n) = split_rule(r)?;
         let op = absolutish(Path::new(o));
         let np = absolutish(Path::new(n));
         if op == Path::new("/") {
@@ -206,7 +291,22 @@ pub fn absolutish(p: &Path) -> PathBuf {
     } else {
         p.to_path_buf()
     };
-    if expanded.is_absolute() {
+    // a drive-letter prefix (C:\ or C:/) is absolute on Windows even
+    // when parsed on a POSIX host, and a leading-/ POSIX path stays
+    // itself even when parsed on Windows (the engines compare path
+    // STRINGS; cwd-joining either corrupts the rule — the first
+    // Windows CI run exposed the POSIX half)
+    let s_opt = expanded.to_str();
+    let drive_abs = s_opt.is_some_and(|s| {
+        s.len() >= 2 && s.as_bytes()[1] == b':' && s.as_bytes()[0].is_ascii_alphabetic()
+    });
+    let posix_abs = s_opt.is_some_and(|s| s.starts_with('/'));
+    if posix_abs {
+        // keep the POSIX string verbatim: normalize() round-trips
+        // through PathBuf, which flips separators to \\ on Windows and
+        // the needle would no longer match the POSIX-stored path
+        expanded
+    } else if expanded.is_absolute() || drive_abs {
         normalize(&expanded)
     } else {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

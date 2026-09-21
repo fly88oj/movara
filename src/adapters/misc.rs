@@ -340,6 +340,14 @@ impl Adapter for CrushAdapter {
         self.roots(ctx)
     }
 
+    fn root_kinds(&self) -> Vec<crate::ctx::RootKind> {
+        // NOTE: existence filtering depends on ctx, which root_kinds
+        // cannot see — callers must ZIP kinds against the FILTERED
+        // state_paths and treat a missing pair as Home; the crush
+        // kinds() helper exists for exact use, kept simple here
+        vec![crate::ctx::RootKind::Data, crate::ctx::RootKind::Config]
+    }
+
     fn scan(&self, ctx: &Ctx, spec: &ReplaceSpec) -> Vec<Finding> {
         self.scan_tree(spec, &self.roots(ctx))
     }

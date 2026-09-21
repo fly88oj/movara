@@ -34,6 +34,10 @@ sys-locale = "0.3"
 walkdir = "2"
 tar = "0.4"
 flate2 = "1"
+unicode-normalization = "0.1"
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
 
 [dev-dependencies]
 tempfile = "3"

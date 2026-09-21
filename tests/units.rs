@@ -8,6 +8,7 @@ use movara::backup;
 use movara::encodings;
 use movara::protobuf::pb_replace;
 use movara::spec::ReplaceSpec;
+use serde_json::json;
 use std::fs;
 
 fn read(p: &std::path::Path) -> String {
@@ -78,7 +79,7 @@ fn no_old_references_left_after_full_migration() {
     // text; opencode event.data blob; pi run-history task text) —
     // rewritten only with --deep
     for p in fx.grep(&fx.old) {
-        let name = p.to_string_lossy().into_owned();
+        let name = p.to_string_lossy().replace('\\', "/");
         let is_content = name.ends_with("rollout-x.jsonl")
             || name.ends_with("opencode/opencode.db")
             || name.ends_with("run-history.jsonl");
@@ -86,6 +87,10 @@ fn no_old_references_left_after_full_migration() {
     }
     // derived sha256 tokens must be gone too
     assert!(fx.grep(&encodings::sha256_hex(&fx.old)).is_empty());
+}
+
+fn json_val(line: &str) -> serde_json::Value {
+    serde_json::from_str(line).unwrap()
 }
 
 #[test]
@@ -104,9 +109,14 @@ fn claude_bucket_rename_and_json_keys() {
     assert!(cj["projects"].get(&fx.new).is_some());
     assert!(cj["projects"].get(&fx.old).is_none());
     assert!(cj["projects"].get("/other").is_some());
-    let hist = read(&fx.ctx.h(".claude/history.jsonl"));
-    assert!(hist.contains(&fx.new));
-    assert!(!hist.contains(&fx.old));
+    // JSON on disk escapes Windows backslashes — compare parsed values
+    let hist_line = json_val(
+        read(&fx.ctx.h(".claude/history.jsonl"))
+            .lines()
+            .next()
+            .unwrap(),
+    );
+    assert_eq!(hist_line["project"], json!(fx.new));
 }
 
 #[test]
@@ -114,9 +124,13 @@ fn codex_meta_rewritten_content_only_with_deep() {
     let fx = Fixture::new("codex");
     fx.migrate(false);
     let rollout = read(&fx.ctx.h(".codex/sessions/2026/09/03/rollout-x.jsonl"));
-    let first = rollout.lines().next().unwrap();
-    assert!(first.contains(&fx.new));
-    assert!(rollout.lines().nth(1).unwrap().contains(&fx.old));
+    let first = json_val(rollout.lines().next().unwrap());
+    assert_eq!(first["payload"]["cwd"], json!(fx.new));
+    let second = json_val(rollout.lines().nth(1).unwrap());
+    assert_eq!(
+        second["payload"]["content"],
+        json!(format!("mentions {} in text", fx.old))
+    );
     let cfg = read(&fx.ctx.h(".codex/config.toml"));
     assert!(cfg.contains(&fx.new));
     assert!(!cfg.contains(&fx.old));
@@ -184,8 +198,10 @@ fn opencode_event_message_blobs_only_with_deep() {
     let data: String = con
         .query_row("SELECT data FROM event", [], |r| r.get(0))
         .unwrap();
-    assert!(
-        data.contains(&fx.old),
+    let v = json_val(&data);
+    assert_eq!(
+        v["info"]["directory"],
+        json!(fx.old),
         "non-deep must leave event.data alone"
     );
 
@@ -195,8 +211,9 @@ fn opencode_event_message_blobs_only_with_deep() {
     let data: String = con
         .query_row("SELECT data FROM event", [], |r| r.get(0))
         .unwrap();
-    assert!(data.contains(&fx.new));
-    assert!(!data.contains(&fx.old));
+    let v = json_val(&data);
+    assert_eq!(v["info"]["directory"], json!(fx.new));
+    assert_eq!(v["text"], json!(format!("at {}", fx.new)));
 }
 
 #[test]
@@ -228,8 +245,10 @@ fn zcode_db_and_memory_key() {
     assert_eq!(cwd, fx.new);
     let mem = fx.ctx.h(".zcode/cli/memories/projects");
     assert!(mem.join(encodings::zcode_memory_key(&fx.new)).is_dir());
-    let meta = read(&fx.ctx.h(".zcode/cli/agents/sess_1/agent_1/metadata.json"));
-    assert!(meta.contains(&fx.new));
+    let meta = json_val(&read(
+        &fx.ctx.h(".zcode/cli/agents/sess_1/agent_1/metadata.json"),
+    ));
+    assert_eq!(meta["workspace"], json!(fx.new));
 }
 
 #[test]
@@ -246,8 +265,8 @@ fn vscode_forks_itemtable_diskkv_and_workspace_json() {
                 |r| r.get(0),
             )
             .unwrap();
-        assert!(val.contains(&fx.new));
-        assert!(!val.contains(&fx.old));
+        let v = json_val(&val);
+        assert_eq!(v["cwd"], json!(fx.new));
         let wj: serde_json::Value = serde_json::from_str(&read(&fx.ctx.c(&format!(
             "{}/User/workspaceStorage/hash1/workspace.json",
             app
@@ -264,7 +283,8 @@ fn vscode_forks_itemtable_diskkv_and_workspace_json() {
             |r| r.get(0),
         )
         .unwrap();
-    assert!(val.contains(&fx.new));
+    let cd = json_val(&val);
+    assert_eq!(cd["workspaceIdentifier"]["uri"]["fsPath"], json!(fx.new));
     assert!(fx
         .ctx
         .h(".cursor/projects")
@@ -319,8 +339,18 @@ fn pi_droid_ccconnect_aider_crush() {
         .is_dir());
     // pi: run-history cwd identity rewritten, task text waits for --deep
     let rh = read(&fx.ctx.h(".pi/agent/run-history.jsonl"));
-    assert!(rh.contains(&fx.new));
-    assert!(rh.contains(&fx.old));
+    assert!(
+        rh.contains(&fx.new) || {
+            let v = json_val(rh.lines().next().unwrap());
+            v["cwd"] == json!(fx.new)
+        }
+    );
+    assert!(
+        rh.contains(&fx.old) || {
+            let v = json_val(rh.lines().next().unwrap());
+            v["task"] == json!(format!("work on {}", fx.old))
+        }
+    );
     // droid json
     let bp: serde_json::Value =
         serde_json::from_str(&read(&fx.ctx.h(".factory/background-processes.json"))).unwrap();
@@ -340,9 +370,10 @@ fn pi_droid_ccconnect_aider_crush() {
                 .iter()
                 // content layers only (rewritten with --deep)
                 .all(|p| {
-                    p.ends_with("rollout-x.jsonl")
-                        || p.ends_with("opencode/opencode.db")
-                        || p.ends_with("run-history.jsonl")
+                    let n = p.to_string_lossy().replace('\\', "/");
+                    n.ends_with("rollout-x.jsonl")
+                        || n.ends_with("opencode/opencode.db")
+                        || n.ends_with("run-history.jsonl")
                 })
     );
     // aider conf

@@ -193,6 +193,20 @@ pub fn rewrite_pb_file(path: &Path, spec: &ReplaceSpec, backup: &mut Backup) -> 
     Ok(true)
 }
 
+/// the column named just before the single `LIKE ?` in a literal SELECT
+fn like_column(select_sql: &str) -> Option<String> {
+    let idx = select_sql.find(" LIKE ?")?;
+    let head = &select_sql[..idx];
+    // the token immediately before ' LIKE ?' is the column — possibly
+    // quote-wrapped ('WHERE "worktree" LIKE ?')
+    let tok = head.rsplit([' ', '(']).next()?.trim_matches('"');
+    if tok.is_empty() || !tok.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return None;
+    }
+    Some(tok.to_string())
+}
+
+/// the `(col LIKE ? OR col LIKE ?)` fragment for N patterns
 /// count rows matching a LIKE pattern (used by scans)
 pub fn sqlite_like_count(con: &rusqlite::Connection, sql: &str, pattern: &str) -> usize {
     if let Ok(mut stmt) = con.prepare(sql) {
@@ -237,16 +251,34 @@ pub fn encoded_bucket_findings(
 /// propagated — callers wrap optional tables with `let _ =`.
 pub fn rewrite_pair(
     con: &rusqlite::Connection,
-    pattern: &str,
+    patterns: &[String],
     spec: &ReplaceSpec,
     select_sql: &str,
     update_sql: &str,
 ) -> Result<usize> {
+    // widen the single LIKE arm to one ? per pattern: the column name is
+    // taken from the caller's own 'col LIKE ?' fragment (Windows JSON
+    // columns carry doubled backslashes — see ReplaceSpec::like_patterns)
+    let select_sql = if patterns.len() > 1 {
+        if let Some(col) = like_column(select_sql) {
+            let arms: Vec<String> = (0..patterns.len())
+                .map(|_| format!("\"{}\" LIKE ?", col))
+                .collect();
+            let joined = arms.join(" OR ");
+            // the ORIGINAL column token stays in place: replace only the
+            // 'LIKE ?' tail (the leading column was already consumed)
+            select_sql.replace(&format!("\"{}\" LIKE ?", col), &joined)
+        } else {
+            select_sql.to_string()
+        }
+    } else {
+        select_sql.to_string()
+    };
     // pk is fetched as a dynamically-typed Value so both INTEGER and TEXT
     // primary keys (omp history.id vs most agents' TEXT ids) round-trip
     let rows: Vec<(rusqlite::types::Value, String)> = {
-        let mut stmt = con.prepare(select_sql)?;
-        let it = stmt.query_map([pattern], |r| {
+        let mut stmt = con.prepare(&select_sql)?;
+        let it = stmt.query_map(rusqlite::params_from_iter(patterns.iter()), |r| {
             Ok((
                 r.get::<_, rusqlite::types::Value>(0)?,
                 r.get::<_, Option<String>>(1)?,
@@ -317,6 +349,15 @@ pub trait Adapter {
     fn display(&self) -> &'static str;
     fn note(&self) -> &'static str;
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf>;
+    /// root kind of EACH state path returned by `state_paths`, in the
+    /// same order (zip!); archives carry the kind so a member lands
+    /// under the RIGHT root on a foreign OS — home-relative alone is
+    /// many-to-one (`.config/X` and `.local/share/X` both collapse to
+    /// `%APPDATA%\X` on Windows) and cannot be inverted
+    fn root_kinds(&self) -> Vec<crate::ctx::RootKind> {
+        // default: every root is home-direct (true for the majority)
+        vec![crate::ctx::RootKind::Home]
+    }
     fn scan(&self, _ctx: &Ctx, _spec: &ReplaceSpec) -> Vec<Finding> {
         Vec::new()
     }
@@ -554,7 +595,7 @@ impl Adapter for OmpAdapter {
                         let con = crate::sqlite::open_rw(&db)?;
                         rewrite_pair(
                             &con,
-                            &spec.like_pattern(),
+                            &spec.like_patterns(),
                             spec,
                             "SELECT \"id\",\"cwd\" FROM \"history\" \
                              WHERE \"cwd\" LIKE ?",

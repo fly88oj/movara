@@ -25,7 +25,10 @@ fn target_home(tag: &str, proj_rel: &str) -> (movara::ctx::Ctx, PathBuf) {
         config_home: home.join(".config"),
         data_home: home.join(".local").join("share"),
     };
-    let proj = ctx.home.join(proj_rel);
+    let proj = ctx
+        .home
+        .join(proj_rel.split('/').next().unwrap_or(proj_rel))
+        .join(proj_rel.split_once('/').map(|(_, r)| r).unwrap_or(""));
     fs::create_dir_all(&proj).unwrap();
     (ctx, tmp)
 }
@@ -88,8 +91,16 @@ fn export_excludes_secrets_and_projects_configs() {
     assert!(!saw_snapshot, "shell snapshot leaked into archive");
     assert!(!saw_aider_conf, "aider config leaked into archive");
     // projection: projects map travels, secrets and settings do not
-    assert!(claude_json.contains(&fx.old), "projects map missing");
-    assert!(!claude_json.contains("sekret-mcp"), "mcpServers leaked");
+    // (parsed comparison: Windows keys are backslash-escaped on disk)
+    let proj_obj: serde_json::Value = serde_json::from_str(&claude_json).unwrap();
+    assert!(
+        proj_obj["projects"].get(&fx.old).is_some(),
+        "projects map missing"
+    );
+    assert!(
+        !claude_json.contains("marker-mcp-value"),
+        "mcpServers leaked"
+    );
     assert!(!claude_json.contains("numStartups"), "settings leaked");
     // no secret marker anywhere in the archive
     for entry in walkdir::WalkDir::new(&staging.dir)
@@ -100,7 +111,7 @@ fn export_excludes_secrets_and_projects_configs() {
         let raw = fs::read(entry.path()).unwrap();
         let text = String::from_utf8_lossy(&raw);
         assert!(
-            !text.contains("sekret-mcp")
+            !text.contains("marker-mcp-value")
                 && !text.contains("sekret-creds")
                 && !text.contains("sekret-snap"),
             "secret leaked via {}",
@@ -124,7 +135,12 @@ fn import_rebase_matches_migrate() {
     let (ctx_b, tmp_b) = target_home("exp-rt", "proj/cba");
     let rules = vec![(
         fx.old.clone(),
-        ctx_b.home.join("proj/cba").to_string_lossy().into_owned(),
+        ctx_b
+            .home
+            .join("proj")
+            .join("cba")
+            .to_string_lossy()
+            .into_owned(),
     )];
 
     let staging = archive::open(&out).unwrap();
@@ -159,10 +175,16 @@ fn import_rebase_matches_migrate() {
     assert!(report.placed > 0, "nothing placed");
 
     // same assertions a migrate would satisfy, on the target host
-    let enc_new = movara::encodings::dash_encode(&ctx_b.home.join("proj/cba").to_string_lossy());
+    let enc_new =
+        movara::encodings::dash_encode(&ctx_b.home.join("proj").join("cba").to_string_lossy());
     assert!(ctx_b.h(".claude/projects").join(&enc_new).is_dir());
     let cj: serde_json::Value = serde_json::from_str(&read(&ctx_b.h(".claude.json"))).unwrap();
-    let new_key = ctx_b.home.join("proj/cba").to_string_lossy().into_owned();
+    let new_key = ctx_b
+        .home
+        .join("proj")
+        .join("cba")
+        .to_string_lossy()
+        .into_owned();
     assert!(cj["projects"].get(&new_key).is_some());
     assert!(cj["projects"].get(&fx.old).is_none());
     // target settings survive the projection merge (merged into {} here)
@@ -188,7 +210,10 @@ fn import_rebase_matches_migrate() {
     assert!(!ctx_b.h(".claude").exists(), "created state survived undo");
     assert!(!ctx_b.h(".claude.json").exists());
     assert!(!ctx_b.h(".codex").exists());
-    assert!(ctx_b.home.join("proj/cba").is_dir(), "project dir harmed");
+    assert!(
+        ctx_b.home.join("proj").join("cba").is_dir(),
+        "project dir harmed"
+    );
     let _ = fs::remove_dir_all(&tmp_b);
     let _ = fs::remove_dir_all(&fx.tmp);
 }
@@ -262,6 +287,11 @@ fn rule_validation() {
     assert!(spec::prepare_rules(&mk(&["/a:/b/x", "/b:/c"])).is_err());
     // no separator
     assert!(spec::prepare_rules(&mk(&["/a/x"])).is_err());
+    // Windows drive-pair: the NEW path's drive colon must not become
+    // the split point (last-colon would yield old='C:\old:C')
+    let w = spec::prepare_rules(&mk(&[r"C:\old:C:\new"])).unwrap();
+    assert_eq!(w[0].0, r"C:\old");
+    assert_eq!(w[0].1, r"C:\new");
     // ordering: longest source first (windows-style last-colon split too)
     let r = spec::prepare_rules(&mk(&["/a:/z", "/a/proj:/z/proj"])).unwrap();
     assert_eq!(r[0].0, "/a/proj");
@@ -285,7 +315,7 @@ fn manifest_shape() {
     let out = do_export(&fx, "mf");
     let staging = archive::open(&out).unwrap();
     let m = &staging.manifest;
-    assert_eq!(m.format, 1);
+    assert_eq!(m.format, movara::archive::FORMAT);
     assert_eq!(m.os, std::env::consts::OS);
     assert!(!m.agents.is_empty());
     assert!(m.paths.contains(&fx.old), "project path not enumerated");
@@ -530,19 +560,19 @@ fn path_filtered_export_selects_and_rebases() {
     let enc_sibling = movara::encodings::dash_encode(&sibling);
     assert!(!staging
         .dir
-        .join(format!("data/claude/.claude/projects/{}", enc_sibling))
+        .join(format!("data/claude/home/.claude/projects/{}", enc_sibling))
         .exists());
     let enc_old = movara::encodings::dash_encode(&fx.old);
     assert!(staging
         .dir
-        .join(format!("data/claude/.claude/projects/{}", enc_old))
+        .join(format!("data/claude/home/.claude/projects/{}", enc_old))
         .join("sess1.jsonl")
         .exists());
     assert!(staging.manifest.filtered);
     assert_eq!(staging.manifest.paths, vec![fx.old.clone()]);
     // path-filtered projection keeps ONLY the selected project's key
     let proj: serde_json::Value =
-        serde_json::from_str(&read(&staging.dir.join("data/claude/.claude.json"))).unwrap();
+        serde_json::from_str(&read(&staging.dir.join("data/claude/home/.claude.json"))).unwrap();
     assert!(proj["projects"].get(&fx.old).is_some());
     assert!(
         proj["projects"].get("/other").is_none(),
@@ -551,13 +581,13 @@ fn path_filtered_export_selects_and_rebases() {
     // shared db included when it references the path
     assert!(staging
         .dir
-        .join("data/opencode/.local/share/opencode/opencode.db")
+        .join("data/opencode/data/opencode/opencode.db")
         .exists());
     // hash-named qwen tmp bucket selected by its directory name
     assert!(staging
         .dir
         .join(format!(
-            "data/qwen/.qwen/tmp/{}",
+            "data/qwen/home/.qwen/tmp/{}",
             movara::encodings::sha256_hex(&fx.old)
         ))
         .exists());
@@ -566,7 +596,12 @@ fn path_filtered_export_selects_and_rebases() {
     let (ctx_b, tmp_b) = target_home("exp-path", "proj/cba");
     let rules = vec![(
         fx.old.clone(),
-        ctx_b.home.join("proj/cba").to_string_lossy().into_owned(),
+        ctx_b
+            .home
+            .join("proj")
+            .join("cba")
+            .to_string_lossy()
+            .into_owned(),
     )];
     let staging = archive::open(&out).unwrap();
     let spec = ReplaceSpec::new(&rules[0].0, &rules[0].1).unwrap();
@@ -591,7 +626,12 @@ fn path_filtered_export_selects_and_rebases() {
     )
     .unwrap();
     bk.save().unwrap();
-    let new_key = ctx_b.home.join("proj/cba").to_string_lossy().into_owned();
+    let new_key = ctx_b
+        .home
+        .join("proj")
+        .join("cba")
+        .to_string_lossy()
+        .into_owned();
     let enc_new = movara::encodings::dash_encode(&new_key);
     assert!(
         ctx_b.h(".claude/projects").join(&enc_new).is_dir(),
@@ -644,7 +684,7 @@ fn deep_basename_directory_does_not_leak() {
         !staging
             .dir
             .join(format!(
-                "data/claude/.claude/projects/some-deep-dir/{}/notes.txt",
+                "data/claude/home/.claude/projects/some-deep-dir/{}/notes.txt",
                 bn
             ))
             .exists(),

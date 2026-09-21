@@ -26,7 +26,7 @@ impl Fixture {
         // path fails; macOS /tmp -> /private/tmp must be resolved before
         // tests compare against realpath-derived bucket names
         fs::create_dir_all(&raw).unwrap();
-        let tmp = std::fs::canonicalize(&raw).unwrap_or(raw);
+        let tmp = movara::ctx::de_verbatim(&std::fs::canonicalize(&raw).unwrap_or(raw));
         let home = tmp.join("home");
         let old_dir = tmp.join("proj").join("abc");
         fs::create_dir_all(&old_dir).unwrap();
@@ -46,9 +46,20 @@ impl Fixture {
         f
     }
 
+    /// write a JSON line/object with proper escaping (Windows paths
+    /// contain backslashes that format! would emit as invalid JSON
+    /// escapes — serde_json escapes them correctly)
+    fn wj(&self, rel: &str, v: serde_json::Value) -> PathBuf {
+        self.w(rel, &v.to_string())
+    }
+
+    fn wl(&self, rel: &str, v: serde_json::Value) -> PathBuf {
+        self.w(rel, &format!("{}\n", v))
+    }
+
     pub fn w(&self, rel: &str, data: &str) -> PathBuf {
         let p = self.ctx.home.join(rel);
-        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::create_dir_all(p.parent().unwrap_or(&p)).unwrap();
         fs::write(&p, data).unwrap();
         p
     }
@@ -78,34 +89,35 @@ impl Fixture {
 
     fn build_claude(&self) {
         let enc_old = movara::encodings::dash_encode(&self.old);
-        self.w(
+        self.wl(
             &format!(".claude/projects/{}/sess1.jsonl", enc_old),
-            &format!(
-                "{{\"type\":\"user\",\"cwd\":\"{}\",\"sessionId\":\"s1\",\
-                 \"message\":{{\"role\":\"user\",\"content\":\"hello\"}}}}\n",
-                self.old
-            ),
+            serde_json::json!({
+                "type": "user", "cwd": self.old, "sessionId": "s1",
+                "message": {"role": "user", "content": "hello"}
+            }),
         );
         let sibling = format!("{}2", self.old);
-        self.w(
+        self.wl(
             &format!(
                 ".claude/projects/{}/x.jsonl",
                 movara::encodings::dash_encode(&sibling)
             ),
-            &format!("{{\"cwd\":\"{}\"}}\n", sibling),
+            serde_json::json!({"cwd": sibling}),
         );
-        self.w(
+        self.wl(
             ".claude/history.jsonl",
-            &format!("{{\"display\":\"hi\",\"project\":\"{}\"}}\n", self.old),
+            serde_json::json!({"display": "hi", "project": self.old}),
         );
-        self.w(
+        self.wj(
             ".claude.json",
-            &format!(
-                "{{\"numStartups\":5,\"mcpServers\":{{\"db\":{{\"env\":\
-                 {{\"API_KEY\":\"sekret-mcp\"}}}}}},\"projects\":{{\"{}\":\
-                 {{\"allowedTools\":[]}},\"/other\":{{}}}}}}",
-                self.old
-            ),
+            serde_json::json!({
+                "numStartups": 5,
+                "mcpServers": {"db": {"env": {"MARKER_MCP": "marker-mcp-value"}}},
+                "projects": {
+                    self.old.clone(): {"allowedTools": []},
+                    "/other".to_string(): {}
+                }
+            }),
         );
         // secret carriers that must never leave the machine in an export
         self.w(".claude/.credentials.json", "{\"token\":\"sekret-creds\"}");
@@ -116,23 +128,30 @@ impl Fixture {
     }
 
     fn build_codex(&self) {
+        let meta = |id: &str| {
+            serde_json::json!({
+                "type": "session_meta",
+                "payload": {"id": id, "cwd": self.old}
+            })
+            .to_string()
+        };
         self.w(
             ".codex/sessions/2026/09/03/rollout-x.jsonl",
             &format!(
-                "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"u1\",\
-                 \"cwd\":\"{}\"}}}}\n{{\"type\":\"response_item\",\
-                 \"payload\":{{\"type\":\"message\",\"content\":\
-                 \"mentions {} in text\"}}}}\n",
-                self.old, self.old
+                "{}\n{}\n",
+                meta("u1"),
+                serde_json::json!({
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "content": format!("mentions {} in text", self.old)
+                    }
+                })
             ),
         );
         self.w(
             ".codex/archived_sessions/rollout-old.jsonl",
-            &format!(
-                "{{\"type\":\"session_meta\",\"payload\":{{\"id\":\"u2\",\
-                 \"cwd\":\"{}\"}}}}\n",
-                self.old
-            ),
+            &format!("{}\n", meta("u2")),
         );
         self.w(
             ".codex/config.toml",
@@ -143,18 +162,18 @@ impl Fixture {
     fn build_gemini(&self) {
         self.w(".gemini/tmp/abc/.project_root", &format!("{}\n", self.old));
         let ph = movara::encodings::sha256_hex(&self.old);
-        self.w(
+        self.wj(
             ".gemini/tmp/abc/chats/session-1.json",
-            &format!(
-                "{{\"sessionId\":\"1\",\"projectHash\":\"{}\",\"messages\":\
-                 [{{\"role\":\"user\",\"parts\":{{\"text\":\"hi\"}}}}]}}",
-                ph
-            ),
+            serde_json::json!({
+                "sessionId": "1",
+                "projectHash": ph,
+                "messages": [{"role": "user", "parts": {"text": "hi"}}]
+            }),
         );
         self.w(".gemini/history/abc/prompts.jsonl", "{\"prompt\":\"hi\"}\n");
-        self.w(
+        self.wj(
             ".gemini/projects.json",
-            &format!("{{\"projects\":{{\"{}\":\"abc\"}}}}", self.old),
+            serde_json::json!({"projects": {self.old.clone(): "abc"}}),
         );
     }
 
@@ -167,14 +186,14 @@ impl Fixture {
         } else {
             movara::encodings::dash_encode(&self.old)
         };
-        self.w(
+        self.wl(
             &format!("{}/projects/{}/sess.jsonl", rel, enc_old),
-            &format!("{{\"cwd\":\"{}\"}}\n", self.old),
+            serde_json::json!({"cwd": self.old}),
         );
         let tmp_old = movara::encodings::sha256_hex(&self.old);
-        self.w(
+        self.wj(
             &format!("{}/tmp/{}/checkpoint.json", rel, tmp_old),
-            &format!("{{\"cwd\":\"{}\"}}", self.old),
+            serde_json::json!({"cwd": self.old}),
         );
     }
 
@@ -202,10 +221,11 @@ impl Fixture {
             "INSERT INTO event VALUES (?,?)",
             rusqlite::params![
                 "evt_1",
-                format!(
-                    "{{\"info\":{{\"directory\":\"{}\"}},\"text\":\"at {}\"}}",
-                    self.old, self.old
-                )
+                serde_json::json!({
+                    "info": {"directory": self.old},
+                    "text": format!("at {}", self.old)
+                })
+                .to_string()
             ],
         )
         .unwrap();
@@ -230,9 +250,9 @@ impl Fixture {
         )
         .unwrap();
         drop(con);
-        self.w(
+        self.wj(
             ".local/share/opencode/storage/session/abc.json",
-            &format!("{{\"id\":\"x\",\"directory\":\"{}\"}}", self.old),
+            serde_json::json!({"id": "x", "directory": self.old}),
         );
     }
 
@@ -241,9 +261,11 @@ impl Fixture {
         self.w(
             &format!(".omp/agent/sessions/{}/2026-s1.jsonl", enc_old),
             &format!(
-                "{{\"type\":\"title\",\"title\":\"t\"}}\n{{\"type\":\
-                 \"session\",\"version\":3,\"id\":\"s1\",\"cwd\":\"{}\"}}\n",
-                self.old
+                "{}\n{}\n",
+                serde_json::json!({"type": "title", "title": "t"}),
+                serde_json::json!({
+                    "type": "session", "version": 3, "id": "s1", "cwd": self.old
+                })
             ),
         );
         let db = self.ctx.h(".omp/agent/history.db");
@@ -287,9 +309,9 @@ impl Fixture {
             &format!(".zcode/cli/memories/projects/{}/MEMORY.md", key_old),
             "# mem\n",
         );
-        self.w(
+        self.wj(
             ".zcode/cli/agents/sess_1/agent_1/metadata.json",
-            &format!("{{\"workspace\":\"{}\"}}", self.old),
+            serde_json::json!({"workspace": self.old}),
         );
     }
 
@@ -308,10 +330,11 @@ impl Fixture {
             "INSERT INTO ItemTable VALUES (?,?)",
             rusqlite::params![
                 "workbench.panel.aichat",
-                format!(
-                    "{{\"workspace\":\"file://{}\",\"cwd\":\"{}\"}}",
-                    self.old, self.old
-                )
+                serde_json::json!({
+                    "workspace": format!("file://{}", self.old),
+                    "cwd": self.old
+                })
+                .to_string()
             ],
         )
         .unwrap();
@@ -320,43 +343,46 @@ impl Fixture {
                 "INSERT INTO cursorDiskKV VALUES (?,?)",
                 rusqlite::params![
                     "composerData:1",
-                    format!(
-                        "{{\"workspaceIdentifier\":{{\"uri\":{{\"fsPath\":\
-                         \"{}\",\"external\":\"file://{}\"}}}}}}",
-                        self.old, self.old
-                    )
+                    serde_json::json!({
+                        "workspaceIdentifier": {
+                            "uri": {
+                                "fsPath": self.old,
+                                "external": format!("file://{}", self.old)
+                            }
+                        }
+                    })
+                    .to_string()
                 ],
             )
             .unwrap();
         }
         drop(con);
-        self.w(
+        self.wj(
             &format!(".config/{}/User/workspaceStorage/hash1/workspace.json", app),
-            &format!("{{\"folder\":\"file://{}\"}}", self.old),
+            serde_json::json!({"folder": format!("file://{}", self.old)}),
         );
     }
 
     fn build_cursor_cli(&self) {
         let enc_old = movara::encodings::dash_encode_nolead(&self.old);
-        self.w(
+        self.wl(
             &format!(".cursor/projects/{}/agent-transcripts/t1.jsonl", enc_old),
-            &format!("{{\"cwd\":\"{}\"}}\n", self.old),
+            serde_json::json!({"cwd": self.old}),
         );
     }
 
     fn build_windsurf_codeium(&self) {
         let md5_old = movara::encodings::md5_hex(&self.old);
-        self.w(
+        self.wj(
             &format!(".codeium/windsurf/context_state/{}/state.json", md5_old),
-            &format!("{{\"cwd\":\"{}\"}}", self.old),
+            serde_json::json!({"cwd": self.old}),
         );
         self.w(
             ".codeium/windsurf/mcp_config.json",
-            &format!(
-                "{{\"mcpServers\":{{\"x\":{{\"command\":\"/bin/ls\",\
-                 \"cwd\":\"{}\"}}}}}}",
-                self.old
-            ),
+            &serde_json::json!({
+                "mcpServers": {"x": {"command": "/bin/ls", "cwd": self.old}}
+            })
+            .to_string(),
         );
     }
 
@@ -377,13 +403,14 @@ impl Fixture {
     }
 
     fn build_continue(&self) {
-        self.w(
+        self.wj(
             ".continue/sessions/uuid1.json",
-            &format!(
-                "{{\"sessionId\":\"uuid1\",\"title\":\"t\",\
-                 \"workspaceDirectory\":\"file://{}\",\"history\":[]}}",
-                self.old
-            ),
+            serde_json::json!({
+                "sessionId": "uuid1",
+                "title": "t",
+                "workspaceDirectory": format!("file://{}", self.old),
+                "history": []
+            }),
         );
         let db = self.ctx.h(".continue/index/index.sqlite");
         fs::create_dir_all(db.parent().unwrap()).unwrap();
@@ -404,54 +431,63 @@ impl Fixture {
         self.w(".pi/agent/projects-memory/abc/AGENTS.md", "mem\n");
         self.w(
             ".pi/agent/run-history.jsonl",
-            &format!(
-                "{{\"agent\":\"x\",\"cwd\":\"{}\",\"task\":\"work on {}\"}}\n",
-                self.old, self.old
-            ),
+            &serde_json::json!({
+                "agent": "x", "cwd": self.old, "task": format!("work on {}", self.old)
+            })
+            .to_string(),
         );
         let enc_old = movara::encodings::pi_bucket(&self.old);
         self.w(
             &format!(".pi/agent/sessions/{}/2026-01-01_uuid7.jsonl", enc_old),
             &format!(
-                "{{\"type\":\"session\",\"version\":3,\"id\":\"uuid7\",\
-                 \"cwd\":\"{}\"}}\n",
-                self.old
+                "{}\n",
+                serde_json::json!({
+                    "type": "session", "version": 3, "id": "uuid7", "cwd": self.old
+                })
             ),
         );
     }
 
     fn build_droid(&self) {
-        self.w(
+        self.wj(
             ".factory/sessions/s1.json",
-            &format!("{{\"sessionId\":\"s1\",\"cwd\":\"{}\"}}", self.old),
+            serde_json::json!({"sessionId": "s1", "cwd": self.old}),
         );
-        self.w(
+        self.wj(
             ".factory/background-processes.json",
-            &format!("{{\"procs\":[{{\"cwd\":\"{}\"}}]}}", self.old),
+            serde_json::json!({"procs": [{"cwd": self.old}]}),
         );
     }
 
     fn build_crush(&self) {
-        self.w(
+        self.wj(
             ".local/share/crush/projects.json",
-            &format!(
-                "{{\"projects\":[{{\"path\":\"{}\",\"data_dir\":\"{}/.crush\",\
-                 \"last_accessed\":1}},{{\"path\":\"/other\",\
-                 \"data_dir\":\"/other/.crush\",\"last_accessed\":2}}]}}",
-                self.old, self.old
-            ),
+            serde_json::json!({
+                "projects": [
+                    {
+                        "path": self.old,
+                        "data_dir": format!("{}/.crush", self.old),
+                        "last_accessed": 1
+                    },
+                    {
+                        "path": "/other",
+                        "data_dir": "/other/.crush",
+                        "last_accessed": 2
+                    }
+                ]
+            }),
         );
     }
 
     fn build_ccconnect(&self) {
-        self.w(
+        self.wj(
             ".cc-connect/dir_history.json",
-            &format!("{{\"sandbox\":[\"{}\"],\"other\":[\"/x\"]}}", self.old),
+            serde_json::json!({"sandbox": [self.old], "other": ["/x"]}),
         );
         let h8 = movara::encodings::sha256_8(&self.old);
-        self.w(
+        self.wj(
             &format!(".cc-connect/sessions/proj_{}.json", h8),
-            &format!("{{\"workDir\":\"{}\"}}", self.old),
+            serde_json::json!({"workDir": self.old}),
         );
     }
 
@@ -480,6 +516,25 @@ impl Fixture {
     /// boundary-aware grep over the fixture home (backups excluded): the
     /// needle counts only when NOT followed by a name byte (same rule the
     /// engine enforces), so "/a/abc2" does not count for "/a/abc"
+    #[allow(clippy::only_used_in_recursion)]
+    fn boundary_ok_escaped(raw: &[u8], needle_b: &[u8]) -> bool {
+        let mut i = 0;
+        while let Some(pos) = memchr::memmem::find(&raw[i..], needle_b) {
+            let after = i + pos + needle_b.len();
+            match raw.get(after) {
+                None => return true,
+                Some(b) => {
+                    let name = b.is_ascii_alphanumeric() || *b == b'_' || *b == b'.' || *b == b'-';
+                    if !name {
+                        return true;
+                    }
+                    i = after;
+                }
+            }
+        }
+        false
+    }
+
     pub fn grep(&self, needle: &str) -> Vec<PathBuf> {
         let mut hits = Vec::new();
         self.walk(&self.ctx.home, needle, &mut hits);
@@ -489,6 +544,9 @@ impl Fixture {
     #[allow(clippy::only_used_in_recursion)]
     fn walk(&self, root: &Path, needle: &str, hits: &mut Vec<PathBuf>) {
         let needle_b = needle.as_bytes();
+        // JSON on disk stores Windows paths with doubled backslashes; the
+        // raw needle never matches the escaped bytes, so probe both
+        let escaped_b = needle.replace('\\', "\\\\").into_bytes();
         let boundary_ok = |raw: &[u8]| -> bool {
             let mut i = 0;
             while let Some(pos) = memchr::memmem::find(&raw[i..], needle_b) {
@@ -509,7 +567,7 @@ impl Fixture {
         };
         if root.is_file() {
             if let Ok(raw) = fs::read(root) {
-                if boundary_ok(&raw) {
+                if boundary_ok(&raw) || Self::boundary_ok_escaped(&raw, &escaped_b) {
                     hits.push(root.to_path_buf());
                 }
             }

@@ -51,8 +51,11 @@ pub fn md5_hex(path: &str) -> String {
 }
 
 pub fn basename(path: &str) -> String {
-    let p = path.trim_end_matches('/');
-    let name = p.rsplit('/').next().unwrap_or(p);
+    // both separators: Windows canonicalize returns \\?\C:\... and a
+    // '/'-only split yields the WHOLE verbatim path as the "name" —
+    // which then lands inside filenames (invalid on NTFS)
+    let p = path.trim_end_matches(['/', '\\']);
+    let name = p.rsplit(['/', '\\']).next().unwrap_or(p);
     if name.is_empty() {
         "/".to_string()
     } else {
@@ -81,10 +84,19 @@ pub fn omp_bucket(path: &str, home: &str) -> String {
 
 /// pi coding agent: sessions/--<encoded-cwd>-- ('/' '\' ':' -> '-')
 pub fn pi_bucket(path: &str) -> String {
+    // strip the Windows verbatim prefix first: \\?\C:\... leaves a '?'
+    // behind separator mapping, and '?' is invalid in NTFS filenames
     let p = path.trim_start_matches('/');
+    let p = p.strip_prefix("\\\\?\\").unwrap_or(p);
     let enc: String = p
         .chars()
-        .map(|c| matches!(c, '/' | '\\' | ':').then(|| '-').unwrap_or(c))
+        .map(|c| {
+            if c == '/' || c == '\\' || c == ':' || c == '?' {
+                '-'
+            } else {
+                c
+            }
+        })
         .collect();
     format!("--{}--", enc)
 }
@@ -142,8 +154,9 @@ pub fn iflow_bucket(path: &str) -> String {
 
 fn canonical_str(path: &str) -> String {
     std::fs::canonicalize(path)
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| path.to_string())
+        .map(|p| p.to_string_lossy().into_owned().replace('\\', "/"))
+        .unwrap_or(path.to_string())
+        .replace('\\', "/")
 }
 
 fn hex(bytes: &[u8]) -> String {

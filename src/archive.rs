@@ -28,7 +28,12 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use walkdir::WalkDir;
 
-pub const FORMAT: u32 = 1;
+/// current archive format: root-kind-segmented members
+/// (`data/<agent>/<root-kind>/<rel>`) + NFC/`/`-normalized paths
+pub const FORMAT: u32 = 2;
+/// the format this binary still READS as legacy (pre-1.3 archives:
+/// home-relative members, no root-kind segment)
+pub const LEGACY_FORMAT: u32 = 1;
 
 // ------------------------------------------------------------- manifest
 
@@ -222,14 +227,23 @@ pub fn open_stream<R: std::io::Read>(r: R) -> Result<Staging> {
     let manifest: ArchiveManifest = serde_json::from_str(&fs::read_to_string(&mpath)?)
         .with_context(|| t!("archive.err_manifest").to_string())?;
     if manifest.format != FORMAT {
-        bail!(
-            "{}",
-            t!(
-                "archive.err_format",
-                found = manifest.format,
-                supported = FORMAT
-            )
-        );
+        if manifest.format == LEGACY_FORMAT {
+            // pre-1.3 archive: home-relative members without a root-kind
+            // segment. Readable as legacy — the os-match rule decides
+            // whether placement is identity or layout-mapped
+            if manifest.os != std::env::consts::OS {
+                eprintln!("{}", t!("archive.legacy_os_mismatch"));
+            }
+        } else {
+            bail!(
+                "{}",
+                t!(
+                    "archive.err_format",
+                    found = manifest.format,
+                    supported = FORMAT
+                )
+            );
+        }
     }
     Ok(Staging {
         dir: base,
@@ -300,11 +314,18 @@ pub fn run_export_into<W: std::io::Write>(
         if !adapter.installed(ctx) {
             continue;
         }
-        for root in adapter.state_paths(ctx) {
+        let roots = adapter.state_paths(ctx);
+        let default_kinds = vec![crate::ctx::RootKind::Home; roots.len()];
+        let kinds = adapter.root_kinds();
+        for (root, kind) in roots
+            .iter()
+            .zip(kinds.iter().chain(default_kinds.iter()).take(roots.len()))
+        {
             export_root(
                 ctx,
                 adapter.name(),
-                &root,
+                root,
+                *kind,
                 sel.as_ref(),
                 opts.paths.as_slice(),
                 &mut writer,
@@ -462,20 +483,25 @@ fn secret_looking(name: &str) -> bool {
 
 /// archive one state root (a directory tree or a single file) under
 /// `data/<agent>/<home-relative-path>`
+#[allow(clippy::too_many_arguments)]
 fn export_root<W: std::io::Write>(
     ctx: &Ctx,
     agent: &str,
     root: &Path,
+    kind: crate::ctx::RootKind,
     sel: Option<&SelectionTokens>,
     filter_paths: &[String],
     writer: &mut ArchiveWriter<W>,
     report: &mut ExportReport,
 ) -> Result<()> {
-    let home_rel = match root.strip_prefix(&ctx.home) {
-        Ok(r) => crate::ctx::path_str(r),
+    // format 2: members carry the root-kind segment so a foreign-OS
+    // import maps under the RIGHT root (`.config/X` <-> `%APPDATA%\\X`)
+    let agent_prefix = format!("data/{}/{}", agent, kind.segment());
+    let base = ctx.root_of(kind);
+    let home_rel = match root.strip_prefix(&base) {
+        Ok(r) => crate::ctx::to_portable_rel(&crate::ctx::path_str(r)),
         Err(_) => {
-            // state outside the home (e.g. foreign XDG bases) is not
-            // portable in format 1 — skip it loudly
+            // state outside its own root family is not portable — skip loudly
             eprintln!(
                 "{}",
                 t!(
@@ -497,14 +523,44 @@ fn export_root<W: std::io::Write>(
             if !bytes_match(&raw, &sel.content) {
                 return Ok(());
             }
-            export_file_bytes(ctx, agent, &home_rel, root, &raw, keep, writer, report)?;
+            export_file_bytes(
+                ctx,
+                agent,
+                &agent_prefix,
+                &home_rel,
+                root,
+                &raw,
+                keep,
+                writer,
+                report,
+            )?;
             return Ok(());
         }
-        export_file_bytes(ctx, agent, &home_rel, root, &raw, keep, writer, report)?;
+        export_file_bytes(
+            ctx,
+            agent,
+            &agent_prefix,
+            &home_rel,
+            root,
+            &raw,
+            keep,
+            writer,
+            report,
+        )?;
         return Ok(());
     }
     if let Some(sel) = sel {
-        return export_root_filtered(ctx, agent, root, sel, keep, writer, report);
+        return export_root_filtered(
+            ctx,
+            agent,
+            &agent_prefix,
+            root,
+            &base,
+            sel,
+            keep,
+            writer,
+            report,
+        );
     }
     for entry in WalkDir::new(root)
         .sort_by_file_name()
@@ -517,24 +573,36 @@ fn export_root<W: std::io::Write>(
         })
         .filter_map(|e| e.ok())
     {
-        let rel =
-            crate::ctx::path_str(entry.path().strip_prefix(&ctx.home).unwrap_or(entry.path()));
+        let rel = crate::ctx::to_portable_rel(&crate::ctx::path_str(
+            entry.path().strip_prefix(&base).unwrap_or(entry.path()),
+        ));
         if entry.file_type().is_dir() {
-            writer.add_dir(&format!("data/{}/{}", agent, rel))?;
+            writer.add_dir(&format!("{}/{}", agent_prefix, rel))?;
         } else if entry.file_type().is_file() {
             if file_excluded(entry.file_name().to_str().unwrap_or("")) {
                 report.excluded += 1;
                 continue;
             }
-            export_file(ctx, agent, &rel, entry.path(), keep, writer, report)?;
+            export_file(
+                ctx,
+                agent,
+                &agent_prefix,
+                &rel,
+                entry.path(),
+                keep,
+                writer,
+                report,
+            )?;
         }
     }
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn export_file<W: std::io::Write>(
     ctx: &Ctx,
     agent: &str,
+    agent_prefix: &str,
     home_rel: &str,
     path: &Path,
     keep: Option<&[String]>,
@@ -545,13 +613,24 @@ fn export_file<W: std::io::Write>(
     if is_db(path) {
         report.databases += 1;
     }
-    export_file_bytes(ctx, agent, home_rel, path, &raw, keep, writer, report)
+    export_file_bytes(
+        ctx,
+        agent,
+        agent_prefix,
+        home_rel,
+        path,
+        &raw,
+        keep,
+        writer,
+        report,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
 fn export_file_bytes<W: std::io::Write>(
     _ctx: &Ctx,
-    agent: &str,
+    _agent: &str,
+    agent_prefix: &str,
     home_rel: &str,
     path: &Path,
     raw: &[u8],
@@ -565,7 +644,7 @@ fn export_file_bytes<W: std::io::Write>(
         let out = project_bytes(proj, raw, keep)?;
         return match out {
             Some(bytes) => {
-                let member = format!("data/{}/{}", agent, home_rel);
+                let member = format!("{}/{}", agent_prefix, home_rel);
                 writer.add_file(&member, &bytes)?;
                 report.projections += 1;
                 report.files += 1;
@@ -583,7 +662,7 @@ fn export_file_bytes<W: std::io::Write>(
         report.excluded += 1;
         return Ok(());
     }
-    let member = format!("data/{}/{}", agent, home_rel);
+    let member = format!("{}/{}", agent_prefix, home_rel);
     writer.add_file(&member, raw)?;
     report.files += 1;
     report.bytes += raw.len() as u64;
@@ -604,6 +683,26 @@ fn fetch_state_bytes(path: &Path) -> Result<Vec<u8>> {
         })?;
     }
     fs::read(path).with_context(|| path.display().to_string())
+}
+
+/// boundary check for one needle anywhere in the blob
+fn boundary_around(bytes: &[u8], t: &str) -> bool {
+    let tb = t.as_bytes();
+    if tb.is_empty() {
+        return false;
+    }
+    let mut from = 0usize;
+    while let Some(pos) = memchr::memmem::find(&bytes[from..], tb) {
+        let i = from + pos;
+        let end = i + tb.len();
+        let left_ok = i == 0 || !crate::spec::is_name_byte(bytes[i - 1]);
+        let right_ok = end >= bytes.len() || !crate::spec::is_name_byte(bytes[end]);
+        if left_ok && right_ok {
+            return true;
+        }
+        from = i + 1;
+    }
+    false
 }
 
 /// every name a project path can appear as in agent state, split by how
@@ -684,6 +783,16 @@ fn bytes_match(bytes: &[u8], tokens: &[String]) -> bool {
         if tb.is_empty() {
             continue;
         }
+        // JSON stores Windows paths with doubled backslashes; the raw
+        // token is not a byte-substring of the escaped form, so the
+        // escaped variant is probed too (the rewrite side already has
+        // this as the four-form needle variants)
+        if t.contains('\\') {
+            let escaped = t.replace('\\', "\\\\");
+            if boundary_around(bytes, &escaped) {
+                return true;
+            }
+        }
         let mut from = 0usize;
         while let Some(pos) = memchr::memmem::find(&bytes[from..], tb) {
             let i = from + pos;
@@ -703,7 +812,9 @@ fn bytes_match(bytes: &[u8], tokens: &[String]) -> bool {
 fn export_root_filtered<W: std::io::Write>(
     ctx: &Ctx,
     agent: &str,
+    agent_prefix: &str,
     root: &Path,
+    base: &Path,
     sel: &SelectionTokens,
     keep: Option<&[String]>,
     writer: &mut ArchiveWriter<W>,
@@ -757,22 +868,34 @@ fn export_root_filtered<W: std::io::Write>(
         let mut anc = entry.path().parent().map(|p| p.to_path_buf());
         let mut chain = Vec::new();
         while let Some(a2) = anc {
-            if a2 == root {
+            if a2 == root || a2 == base {
                 break;
             }
             chain.push(a2.clone());
             anc = a2.parent().map(|p| p.to_path_buf());
         }
         for a2 in chain.into_iter().rev() {
-            if let Ok(rel) = a2.strip_prefix(&ctx.home) {
-                let key = crate::ctx::path_str(rel);
+            if let Ok(rel) = a2.strip_prefix(base) {
+                let key = crate::ctx::to_portable_rel(&crate::ctx::path_str(rel));
                 if added_dirs.insert(key.clone()) {
-                    writer.add_dir(&format!("data/{}/{}", agent, key))?;
+                    writer.add_dir(&format!("{}/{}", agent_prefix, key))?;
                 }
             }
         }
-        let rel = crate::ctx::path_str(path.strip_prefix(&ctx.home).unwrap_or(&path));
-        export_file_bytes(ctx, agent, &rel, &path, &raw, keep, writer, report)?;
+        let rel = crate::ctx::to_portable_rel(&crate::ctx::path_str(
+            path.strip_prefix(base).unwrap_or(&path),
+        ));
+        export_file_bytes(
+            ctx,
+            agent,
+            agent_prefix,
+            &rel,
+            path.as_path(),
+            &raw,
+            keep,
+            writer,
+            report,
+        )?;
     }
     Ok(())
 }
@@ -787,7 +910,14 @@ fn enumerate_paths(ctx: &Ctx) -> Vec<String> {
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
                     if let Some(obj) = v.get(field).and_then(|f| f.as_object()) {
                         for k in obj.keys() {
-                            if k.starts_with('/') {
+                            // POSIX roots start with '/', Windows with a
+                            // drive letter (either separator)
+                            let rooted = k.starts_with('/')
+                                || (k.len() >= 3
+                                    && k.as_bytes()[1] == b':'
+                                    && k.as_bytes()[0].is_ascii_alphabetic()
+                                    && (k.as_bytes()[2] == b'/' || k.as_bytes()[2] == b'\\'));
+                            if rooted {
                                 out.insert(k.clone());
                             }
                         }
@@ -912,95 +1042,170 @@ pub fn run_import(
         if !wanted(&agent) {
             continue;
         }
-        for entry in WalkDir::new(&agent_dir).into_iter().filter_map(|e| e.ok()) {
-            if !entry.file_type().is_file() {
-                continue;
-            }
-            let home_rel = crate::ctx::path_str(
-                entry
-                    .path()
-                    .strip_prefix(&agent_dir)
-                    .unwrap_or(entry.path()),
-            );
-            let src = entry.path();
-            let dst = ctx.home.join(&home_rel);
-            if dst.components().any(|c| c == Component::ParentDir) {
-                continue;
-            }
-            if !allowed_roots.iter().any(|r| dst.strip_prefix(r).is_ok()) {
-                report.skipped += 1;
-                eprintln!(
-                    "{}",
-                    t!(
-                        "archive.skip_outside_state",
-                        agent = agent.as_str(),
-                        path = dst.display().to_string().as_str()
-                    )
-                );
-                continue;
-            }
-            // projections merge into the target config instead of placing
-            if let Some(proj) = projection_for(&home_rel) {
-                if opts.dry_run {
-                    report.merged += 1;
+        // format 2 nests one dir per root kind (data/<agent>/<kind>/...);
+        // format 1 legacy members sit directly under data/<agent>/
+        let legacy = staging.manifest.format == LEGACY_FORMAT;
+        let kind_dirs: Vec<(Option<crate::ctx::RootKind>, PathBuf)> = if legacy {
+            vec![(None, agent_dir.clone())]
+        } else {
+            sorted_dirs(&agent_dir)?
+                .into_iter()
+                .map(|d| {
+                    let k = d
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .and_then(crate::ctx::RootKind::from_segment);
+                    (k, d)
+                })
+                .collect()
+        };
+        for (kind, kdir) in kind_dirs {
+            let base_root = match kind {
+                Some(k) => ctx.root_of(k),
+                // unknown segment under a format-2 agent dir: skip loudly
+                None if !legacy => {
+                    report.skipped += 1;
                     continue;
                 }
-                let raw = fs::read(src)?;
-                merge_projection(proj, &dst, &raw, &home_rel, backup)?;
-                report.merged += 1;
-                continue;
-            }
-            // a directory in the way is reported and skipped, never
-            // written through
-            if dst.is_dir() {
-                report.skipped += 1;
-                eprintln!(
-                    "{}",
-                    t!(
-                        "archive.skip_dir_conflict",
-                        path = dst.display().to_string().as_str()
-                    )
-                );
-                continue;
-            }
-            if dst.exists() && opts.policy == Policy::Skip {
-                report.skipped += 1;
-                continue;
-            }
-            if opts.dry_run {
-                report.placed += 1;
-                continue;
-            }
-            ensure_dir_journaled(dst.parent(), backup)?;
-            let raw = fs::read(src)?;
-            if dst.exists() {
-                if is_db(&dst) && filtered_exchange {
+                None => ctx.home.clone(),
+            };
+            for entry in WalkDir::new(&kdir).into_iter().filter_map(|e| e.ok()) {
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let home_rel = crate::ctx::from_portable_rel(&crate::ctx::path_str(
+                    entry.path().strip_prefix(&kdir).unwrap_or(entry.path()),
+                ));
+                let src = entry.path();
+                let mut dst = base_root.join(&home_rel);
+                if dst.components().any(|c| c == Component::ParentDir) {
+                    continue;
+                }
+                // Windows reserved device names (CON, PRN, AUX, NUL, COM1-9,
+                // LPT1-9 — case-insensitive, ANY extension) and trailing
+                // dot/space are un-creatable on NTFS: escape with a `_x_`
+                // prefix so the member still lands (claude-code #4928 saw
+                // an undeletable `nul` in the wild)
+                if let Some(name) = dst.file_name().and_then(|n| n.to_str()) {
+                    let stem = name.split('.').next().unwrap_or(name);
+                    let reserved = matches!(
+                        stem.to_ascii_uppercase().as_str(),
+                        "CON"
+                            | "PRN"
+                            | "AUX"
+                            | "NUL"
+                            | "COM1"
+                            | "COM2"
+                            | "COM3"
+                            | "COM4"
+                            | "COM5"
+                            | "COM6"
+                            | "COM7"
+                            | "COM8"
+                            | "COM9"
+                            | "LPT1"
+                            | "LPT2"
+                            | "LPT3"
+                            | "LPT4"
+                            | "LPT5"
+                            | "LPT6"
+                            | "LPT7"
+                            | "LPT8"
+                            | "LPT9"
+                    ) || name.ends_with('.')
+                        || name.ends_with(' ');
+                    if reserved {
+                        let escaped = dst
+                            .parent()
+                            .map(|par| par.join(format!("_x_{}", name)))
+                            .unwrap_or_else(|| dst.clone());
+                        eprintln!(
+                            "{}",
+                            t!(
+                                "archive.escape_reserved",
+                                path = dst.display().to_string().as_str(),
+                                escaped = escaped.display().to_string().as_str()
+                            )
+                        );
+                        // fall through with the escaped target
+                        dst = escaped;
+                    }
+                }
+                if !allowed_roots.iter().any(|r| dst.strip_prefix(r).is_ok()) {
                     report.skipped += 1;
-                    report.skipped_shared_dbs.push(crate::ctx::path_str(&dst));
                     eprintln!(
                         "{}",
                         t!(
-                            "archive.skip_db_filtered",
+                            "archive.skip_outside_state",
+                            agent = agent.as_str(),
                             path = dst.display().to_string().as_str()
                         )
                     );
                     continue;
                 }
-                if is_db(&dst) {
-                    backup.record_db(&dst)?;
-                    let _ = fs::remove_file(format!("{}-wal", dst.display()));
-                    let _ = fs::remove_file(format!("{}-shm", dst.display()));
-                } else {
-                    backup.record_file(&dst)?;
+                // projections merge into the target config instead of placing
+                if let Some(proj) = projection_for(&home_rel) {
+                    if opts.dry_run {
+                        report.merged += 1;
+                        continue;
+                    }
+                    let raw = fs::read(src)?;
+                    merge_projection(proj, &dst, &raw, &home_rel, backup)?;
+                    report.merged += 1;
+                    continue;
                 }
-                crate::rewriters::write_atomic(&dst, &raw)?;
-                report.replaced += 1;
-            } else {
-                backup.record_created(&dst);
-                crate::rewriters::write_atomic(&dst, &raw)?;
-                backup.record_created(Path::new(&format!("{}-wal", dst.display())));
-                backup.record_created(Path::new(&format!("{}-shm", dst.display())));
-                report.placed += 1;
+                // a directory in the way is reported and skipped, never
+                // written through
+                if dst.is_dir() {
+                    report.skipped += 1;
+                    eprintln!(
+                        "{}",
+                        t!(
+                            "archive.skip_dir_conflict",
+                            path = dst.display().to_string().as_str()
+                        )
+                    );
+                    continue;
+                }
+                if dst.exists() && opts.policy == Policy::Skip {
+                    report.skipped += 1;
+                    continue;
+                }
+                if opts.dry_run {
+                    report.placed += 1;
+                    continue;
+                }
+                ensure_dir_journaled(dst.parent(), backup)?;
+                let raw = fs::read(src)?;
+                if dst.exists() {
+                    if is_db(&dst) && filtered_exchange {
+                        report.skipped += 1;
+                        report.skipped_shared_dbs.push(crate::ctx::path_str(&dst));
+                        eprintln!(
+                            "{}",
+                            t!(
+                                "archive.skip_db_filtered",
+                                path = dst.display().to_string().as_str()
+                            )
+                        );
+                        continue;
+                    }
+                    if is_db(&dst) {
+                        backup.record_db(&dst)?;
+                        let _ = fs::remove_file(format!("{}-wal", dst.display()));
+                        let _ = fs::remove_file(format!("{}-shm", dst.display()));
+                    } else {
+                        backup.record_file(&dst)?;
+                    }
+                    crate::rewriters::write_atomic(&dst, &raw)?;
+                    report.replaced += 1;
+                } else {
+                    backup.record_created(&dst);
+                    crate::rewriters::write_atomic(&dst, &raw)?;
+                    backup.record_created(Path::new(&format!("{}-wal", dst.display())));
+                    backup.record_created(Path::new(&format!("{}-shm", dst.display())));
+                    report.placed += 1;
+                }
             }
         }
     }
@@ -1072,10 +1277,11 @@ fn key_selected(key: &str, keep: Option<&[String]>) -> bool {
 fn project_bytes(proj: Projection, raw: &[u8], keep: Option<&[String]>) -> Result<Option<Vec<u8>>> {
     match proj {
         Projection::ClaudeProjects => {
-            let v: serde_json::Value = match serde_json::from_slice(raw) {
-                Ok(v) => v,
-                Err(_) => return Ok(None),
-            };
+            let v: serde_json::Value =
+                match serde_json::from_slice(crate::rewriters::strip_bom(raw)) {
+                    Ok(v) => v,
+                    Err(_) => return Ok(None),
+                };
             let kept: serde_json::Map<String, serde_json::Value> = v
                 .get("projects")
                 .and_then(|p| p.as_object())
@@ -1095,10 +1301,11 @@ fn project_bytes(proj: Projection, raw: &[u8], keep: Option<&[String]>) -> Resul
             }
         }
         Projection::ContinueIdentity => {
-            let v: serde_json::Value = match serde_json::from_slice(raw) {
-                Ok(v) => v,
-                Err(_) => return Ok(None),
-            };
+            let v: serde_json::Value =
+                match serde_json::from_slice(crate::rewriters::strip_bom(raw)) {
+                    Ok(v) => v,
+                    Err(_) => return Ok(None),
+                };
             let mut kept = match crate::rewriters::project_identity_fields(&v) {
                 Some(k) => k,
                 None => return Ok(None),
@@ -1172,9 +1379,11 @@ fn merge_projection(
 ) -> Result<()> {
     match proj {
         Projection::ClaudeProjects => {
-            let archived: serde_json::Value = serde_json::from_slice(archived)?;
+            let archived: serde_json::Value =
+                serde_json::from_slice(crate::rewriters::strip_bom(archived))?;
             let mut target: serde_json::Value = if dst.is_file() {
-                serde_json::from_slice(&fs::read(dst)?).unwrap_or_else(|_| serde_json::json!({}))
+                serde_json::from_slice(crate::rewriters::strip_bom(&fs::read(dst)?))
+                    .unwrap_or_else(|_| serde_json::json!({}))
             } else {
                 serde_json::json!({})
             };
@@ -1199,9 +1408,11 @@ fn merge_projection(
             }
         }
         Projection::ContinueIdentity => {
-            let archived: serde_json::Value = serde_json::from_slice(archived)?;
+            let archived: serde_json::Value =
+                serde_json::from_slice(crate::rewriters::strip_bom(archived))?;
             let mut target: serde_json::Value = if dst.is_file() {
-                serde_json::from_slice(&fs::read(dst)?).unwrap_or_else(|_| serde_json::json!({}))
+                serde_json::from_slice(crate::rewriters::strip_bom(&fs::read(dst)?))
+                    .unwrap_or_else(|_| serde_json::json!({}))
             } else {
                 serde_json::json!({})
             };
@@ -1439,13 +1650,29 @@ pub fn cleanup_source(ctx: &Ctx, members: &[String], backup: &mut Backup) -> Res
         };
         let mut parts = rest.splitn(2, '/');
         let Some(_agent) = parts.next() else { continue };
-        let Some(home_rel) = parts.next() else {
+        let Some(home_rel_owned) = parts.next() else {
             continue;
+        };
+        let mut home_rel = home_rel_owned.to_string();
+        // format 2 nests the root-kind segment after the agent; strip it
+        // and re-anchor at that kind's root (legacy members are
+        // home-relative already)
+        let first_seg = home_rel.split('/').next().unwrap_or_default().to_string();
+        let base = match crate::ctx::RootKind::from_segment(&first_seg) {
+            Some(k) => {
+                let stripped = match home_rel.strip_prefix(&format!("{}/", first_seg)) {
+                    Some(r) => r.to_string(),
+                    None => home_rel.clone(),
+                };
+                home_rel = stripped;
+                ctx.root_of(k)
+            }
+            None => ctx.home.clone(),
         };
         if home_rel.is_empty() || home_rel.contains("..") {
             continue;
         }
-        let local = ctx.home.join(home_rel);
+        let local = base.join(&home_rel);
         if !local.is_file() {
             continue;
         }
@@ -1457,7 +1684,7 @@ pub fn cleanup_source(ctx: &Ctx, members: &[String], backup: &mut Backup) -> Res
                 .or_else(|| home_rel.strip_suffix("-shm"));
             stem.is_some_and(|st| is_db(Path::new(st)))
         };
-        if is_db(&local) || sidecar_of_db || projection_for(home_rel).is_some() {
+        if is_db(&local) || sidecar_of_db || projection_for(&home_rel).is_some() {
             report.kept_shared.push(home_rel.to_string());
             continue;
         }
