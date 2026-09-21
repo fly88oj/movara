@@ -209,15 +209,33 @@ pub fn open(path: &Path) -> Result<Staging> {
     open_stream(fs::File::open(path).with_context(|| path.display().to_string())?)
 }
 
+/// collision-proof staging location: pid + timestamp + in-process
+/// sequence, created exclusively. Microsecond timestamps alone collide
+/// when a quantized VM clock (CI runners) hands two parallel receives
+/// the same instant — `create_dir` refuses an existing name and the
+/// next slot is taken instead.
+fn staging_dir() -> Result<PathBuf> {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    for _ in 0..64 {
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let cand = std::env::temp_dir().join(format!(
+            "movara-import-{}-{}-{}",
+            std::process::id(),
+            chrono::Local::now().format("%Y%m%d-%H%M%S-%6f"),
+            seq
+        ));
+        if fs::create_dir(&cand).is_ok() {
+            return Ok(cand);
+        }
+    }
+    bail!("{}", t!("archive.err_staging"))
+}
+
 /// extract an archive from any reader (file, ssh stdin); the WHOLE stream
 /// is extracted before anything is placed, so a truncated stream fails
 /// here and nothing lands
 pub fn open_stream<R: std::io::Read>(r: R) -> Result<Staging> {
-    let base = std::env::temp_dir().join(format!(
-        "movara-import-{}",
-        chrono::Local::now().format("%Y%m%d-%H%M%S-%6f")
-    ));
-    fs::create_dir_all(&base)?;
+    let base = staging_dir()?;
     let gz = flate2::read::GzDecoder::new(r);
     let mut ar = tar::Archive::new(gz);
     // tar's unpack refuses `..` and absolute members
@@ -1709,4 +1727,26 @@ pub fn cleanup_source(ctx: &Ctx, members: &[String], backup: &mut Backup) -> Res
         let _ = fs::remove_dir(&d); // only succeeds when empty
     }
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// the CI flake this pins: two receives whose microsecond staging
+    /// names collided on a quantized VM clock merged into one staging
+    /// tree and refused each other's members. pid + atomic sequence +
+    /// exclusive create makes sharing impossible whatever the clock does.
+    #[test]
+    fn staging_dirs_are_unique_under_concurrency() {
+        let handles: Vec<_> = (0..16)
+            .map(|_| std::thread::spawn(|| staging_dir().unwrap()))
+            .collect();
+        let mut dirs: Vec<PathBuf> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let set: std::collections::HashSet<PathBuf> = dirs.iter().cloned().collect();
+        assert_eq!(set.len(), dirs.len(), "every staging dir must be distinct");
+        for d in dirs.drain(..) {
+            let _ = fs::remove_dir_all(d);
+        }
+    }
 }
