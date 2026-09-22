@@ -185,6 +185,9 @@ Um `move` entre hosts adiciona a árvore do projeto (com `.git`) à troca: `--st
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bucket por basename + `cwd` do run-state |
 | gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (forma com til inclusive) + symlink `workspace` + listas `files` |
+| Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | state.vscdb do IDE + `memories/<conta>/projects/<dash>/` |
+| Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | state.vscdb do IDE + agents/mcp.json |
+| GitHub Copilot CLI | `~/.copilot` | definições agents/hooks/skills |
 
 Não suportado (por decisão de projeto):
 

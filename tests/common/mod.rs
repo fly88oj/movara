@@ -91,6 +91,84 @@ impl Fixture {
         self.build_openhands();
         self.build_codebuff();
         self.build_gptme();
+        self.build_qoder();
+        self.build_trae();
+        self.build_copilot();
+    }
+
+    /// Qoder/Lingma: VS Code fork IDE state + memories projects buckets
+    /// (dash-encoded) in both ~/.qoder and ~/.lingma/qoder-cn
+    fn build_qoder(&self) {
+        let enc_old = movara::encodings::dash_encode(&self.old);
+        for root in [".qoder", ".lingma/qoder-cn"] {
+            self.w(
+                &format!("{root}/memories/019f8e2a/projects/{enc_old}/note.md"),
+                "memory note\n",
+            );
+        }
+        self.wj(
+            ".qoder/mcp.json",
+            serde_json::json!({"mcpServers": {"x": {"command": "npx", "cwd": self.old}}}),
+        );
+        let u = ".config/Qoder/User";
+        let db = self.ctx.c("Qoder/User/globalStorage/state.vscdb");
+        fs::create_dir_all(db.parent().unwrap()).unwrap();
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT);")
+            .unwrap();
+        con.execute(
+            "INSERT INTO ItemTable VALUES (?,?)",
+            rusqlite::params![
+                "workbench.panel.aichat",
+                serde_json::json!({"history": [{"workspace": self.old}]}).to_string()
+            ],
+        )
+        .unwrap();
+        drop(con);
+        self.w(
+            &format!("{u}/workspaceStorage/ws1/workspace.json"),
+            &format!("{{\"folder\": \"file://{}\"}}\n", self.old),
+        );
+    }
+
+    /// Trae: VS Code fork IDE state (CN build dir with a space) + the
+    /// thin ~/.trae definition root
+    fn build_trae(&self) {
+        let u = ".config/Trae CN/User";
+        let db = self.ctx.c("Trae CN/User/globalStorage/state.vscdb");
+        fs::create_dir_all(db.parent().unwrap()).unwrap();
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT);")
+            .unwrap();
+        con.execute(
+            "INSERT INTO ItemTable VALUES (?,?)",
+            rusqlite::params![
+                "aicode.chatSessions",
+                serde_json::json!({"sessions": [{"workspace": self.old}]}).to_string()
+            ],
+        )
+        .unwrap();
+        drop(con);
+        self.w(
+            &format!("{u}/workspaceStorage/ws2/workspace.json"),
+            &format!("{{\"folder\": \"file://{}\"}}\n", self.old),
+        );
+        self.wj(
+            ".trae/mcp.json",
+            serde_json::json!({"mcpServers": {"y": {"command": "npx", "cwd": self.old}}}),
+        );
+    }
+
+    /// GitHub Copilot CLI: definition layer under ~/.copilot
+    fn build_copilot(&self) {
+        self.wj(
+            ".copilot/agents/review.json",
+            serde_json::json!({"name": "review", "cwd": self.old, "tools": ["bash"]}),
+        );
+        self.w(
+            ".copilot/skills/notes.md",
+            "# notes\nsome agent skill documentation\n",
+        );
     }
 
     /// gptme: ~/.local/share/gptme/logs/<date>-<name>/ with config.toml

@@ -796,3 +796,59 @@ fn gptme_tilde_workspace_form_is_rewritten() {
     );
     let _ = fs::remove_dir_all(&tmp);
 }
+
+#[test]
+fn qoder_memories_buckets_ide_state_and_lingma_move() {
+    let fx = Fixture::new("units-qoder");
+    fx.migrate(false);
+    let enc_old = movara::encodings::dash_encode(&fx.old);
+    let enc_new = movara::encodings::dash_encode(&fx.new);
+    for root in [".qoder", ".lingma/qoder-cn"] {
+        let projects = fx.ctx.h(&format!("{root}/memories/019f8e2a/projects"));
+        assert!(projects.join(&enc_new).is_dir(), "{root} bucket renamed");
+        assert!(!projects.join(&enc_old).exists());
+    }
+    let mcp: serde_json::Value = serde_json::from_str(&read(&fx.ctx.h(".qoder/mcp.json"))).unwrap();
+    assert_eq!(mcp["mcpServers"]["x"]["cwd"], json!(fx.new));
+    let db = fx.ctx.c("Qoder/User/globalStorage/state.vscdb");
+    let con = rusqlite::Connection::open(&db).unwrap();
+    let v: String = con
+        .query_row(
+            "SELECT value FROM ItemTable WHERE key = 'workbench.panel.aichat'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(v.contains(&fx.new) && !v.contains(&fx.old));
+    let ws = read(&fx.ctx.c("Qoder/User/workspaceStorage/ws1/workspace.json"));
+    assert!(ws.contains(&fx.new) && ws.contains("file://"));
+}
+
+#[test]
+fn trae_ide_state_and_definitions_move() {
+    let fx = Fixture::new("units-trae");
+    fx.migrate(false);
+    let db = fx.ctx.c("Trae CN/User/globalStorage/state.vscdb");
+    let con = rusqlite::Connection::open(&db).unwrap();
+    let v: String = con
+        .query_row(
+            "SELECT value FROM ItemTable WHERE key = 'aicode.chatSessions'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(v.contains(&fx.new) && !v.contains(&fx.old));
+    let ws = read(&fx.ctx.c("Trae CN/User/workspaceStorage/ws2/workspace.json"));
+    assert!(ws.contains(&fx.new) && !ws.contains(&fx.old));
+    let mcp: serde_json::Value = serde_json::from_str(&read(&fx.ctx.h(".trae/mcp.json"))).unwrap();
+    assert_eq!(mcp["mcpServers"]["y"]["cwd"], json!(fx.new));
+}
+
+#[test]
+fn copilot_definitions_move() {
+    let fx = Fixture::new("units-copilot");
+    fx.migrate(false);
+    let a: serde_json::Value =
+        serde_json::from_str(&read(&fx.ctx.h(".copilot/agents/review.json"))).unwrap();
+    assert_eq!(a["cwd"], json!(fx.new));
+}

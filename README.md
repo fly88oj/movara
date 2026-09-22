@@ -209,6 +209,9 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bare-basename bucket + run-state `cwd` |
 | gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (tilde form too) + `workspace` symlink + `files` lists |
+| Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<account>/projects/<dash>/` |
+| Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
+| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills definitions |
 
 Not supported (by design):
 

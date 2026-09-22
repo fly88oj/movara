@@ -187,6 +187,9 @@ Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den A
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | Basename-Bucket + run-state `cwd` |
 | gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (auch Tilde-Form) + `workspace`-Symlink + `files`-Listen |
+| Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<Konto>/projects/<dash>/` |
+| Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
+| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills-Definitionen |
 
 Nicht unterstützt (bewusst so entschieden):
 

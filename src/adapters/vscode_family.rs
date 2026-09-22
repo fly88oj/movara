@@ -80,19 +80,24 @@ fn md5_dir_renamed(
     }
 }
 
-struct VscodeBase {
-    app_config_dir: &'static str,
+pub(crate) struct VscodeBase {
+    pub(crate) app_config_dir: &'static str,
 }
 
 impl VscodeBase {
-    fn ide_db(&self, ctx: &Ctx) -> PathBuf {
+    pub(crate) fn ide_db(&self, ctx: &Ctx) -> PathBuf {
         ctx.c(&format!(
             "{}/User/globalStorage/state.vscdb",
             self.app_config_dir
         ))
     }
 
-    fn scan_itemtable(&self, ctx: &Ctx, spec: &ReplaceSpec, label: &str) -> Vec<Finding> {
+    pub(crate) fn scan_itemtable(
+        &self,
+        ctx: &Ctx,
+        spec: &ReplaceSpec,
+        label: &str,
+    ) -> Vec<Finding> {
         let db = self.ide_db(ctx);
         let mut out = Vec::new();
         if !db.is_file() {
@@ -116,7 +121,7 @@ impl VscodeBase {
         out
     }
 
-    fn migrate_itemtable(
+    pub(crate) fn migrate_itemtable(
         &self,
         ctx: &Ctx,
         spec: &ReplaceSpec,
@@ -152,7 +157,12 @@ impl VscodeBase {
         Ok(actions)
     }
 
-    fn scan_workspace_storage(&self, ctx: &Ctx, spec: &ReplaceSpec, label: &str) -> Vec<Finding> {
+    pub(crate) fn scan_workspace_storage(
+        &self,
+        ctx: &Ctx,
+        spec: &ReplaceSpec,
+        label: &str,
+    ) -> Vec<Finding> {
         let ws = ctx.c(&format!("{}/User/workspaceStorage", self.app_config_dir));
         let mut out = Vec::new();
         if let Ok(entries) = std::fs::read_dir(&ws) {
@@ -175,7 +185,7 @@ impl VscodeBase {
         out
     }
 
-    fn migrate_workspace_storage(
+    pub(crate) fn migrate_workspace_storage(
         &self,
         ctx: &Ctx,
         spec: &ReplaceSpec,

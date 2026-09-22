@@ -190,6 +190,9 @@ movara undo --id 20260903-131427-644777
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | 裸 basename 桶 + run-state `cwd` |
 | gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace`（含波浪号形态）+ `workspace` 符号链接 + `files` 列表 |
+| Qoder / 灵码（CN） | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<账户>/projects/<dash>/` |
+| Trae（字节） | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
+| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills 定义 |
 
 不支持（经调研确认）：GitHub Copilot CLI（云端权威）、Amp（服务端存储）、
 claude-code-router（无路径键控状态）。

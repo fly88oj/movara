@@ -207,6 +207,9 @@ src == dst は拒否します。
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | ベア basename バケット + run-state `cwd` |
 | gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace`（チルダ形式含む）+ `workspace` シンボリックリンク + `files` リスト |
+| Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<account>/projects/<dash>/` |
+| Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
+| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills 定義 |
 
 非対応（意図的な判断）：
 

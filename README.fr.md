@@ -186,6 +186,9 @@ Un `move` inter-hôtes ajoute l'arborescence du projet (avec `.git`) à l'échan
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bucket par basename + `cwd` de run-state |
 | gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (forme tilde incluse) + lien symbolique `workspace` + listes `files` |
+| Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | state.vscdb de l'IDE + `memories/<compte>/projects/<dash>/` |
+| Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | state.vscdb de l'IDE + agents/mcp.json |
+| GitHub Copilot CLI | `~/.copilot` | définitions agents/hooks/skills |
 
 Non pris en charge (volontairement) :
 

@@ -7,6 +7,7 @@
 pub mod cline;
 pub mod codebuff;
 pub mod codex;
+pub mod copilot;
 pub mod gemini_family;
 pub mod goose;
 pub mod gptme;
@@ -14,6 +15,8 @@ pub mod kimi;
 pub mod misc;
 pub mod opencode;
 pub mod openhands;
+pub mod qoder;
+pub mod trae;
 pub mod vscode_family;
 pub mod zcode;
 pub mod zed;
@@ -696,6 +699,9 @@ pub fn all() -> Vec<Box<dyn Adapter>> {
         Box::new(openhands::OpenHandsAdapter),
         Box::new(codebuff::CodebuffAdapter),
         Box::new(gptme::GptmeAdapter),
+        Box::new(qoder::QoderAdapter),
+        Box::new(trae::TraeAdapter),
+        Box::new(copilot::CopilotAdapter),
     ]
 }
 
