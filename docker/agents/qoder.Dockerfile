@@ -8,13 +8,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 dpkg \
     && rm -rf /var/lib/apt/lists/*
 
-# best effort: find a linux package link on the official download page
-RUN URL=$(curl -fsSL https://qoder.com/ | grep -oE 'https[^"]*\.deb' | head -1) \
-    && [ -n "$URL" ] && curl -fL "$URL" -o /tmp/qoder.deb \
-    && dpkg-deb -x /tmp/qoder.deb /tmp/qoder-extract \
-    && grep -rqa "memories" /tmp/qoder-extract/opt 2>/dev/null | head -1 \
-    && echo "qoder .deb unpacked; memories layout reference found in shipped build" \
-    || echo "deb channel unreachable — synthetic verification proceeds"
+# the real CLI (official install script — installs `qodercli` into
+# ~/.local/bin and ~/.qoder/bin)
+ENV HOME=/root
+RUN curl -fsSL https://qoder.com/install | bash && /root/.local/bin/qodercli --version
+ENV PATH="/root/.local/bin:${PATH}"
 
 WORKDIR /src
 COPY . .

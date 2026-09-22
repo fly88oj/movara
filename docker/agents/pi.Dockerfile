@@ -1,13 +1,19 @@
-# pi / gsd verification container: installs the real CLI (best
-# effort), then runs a scan/migrate/undo round trip (--encoded--
-# session buckets + run-history cwd + projects-memory).
+# pi / gsd verification container: npm-installs the real CLI
+# (@earendil-works/pi-coding-agent, binary `pi`), then runs a
+# scan/migrate/undo round trip (--encoded-- session buckets +
+# run-history cwd + projects-memory).
 FROM rust:1.98-slim-bookworm
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @mariozechner/pi && pi --version || echo "npm channel unreachable — synthetic verification proceeds"
+# Node 20+ from NodeSource — the pi agent runtime needs it (bookworm
+# ships 18); then the real CLI via npm (@earendil-works/pi-coding-agent)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && node --version
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent && pi --version
 
 WORKDIR /src
 COPY . .

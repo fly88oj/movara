@@ -52,8 +52,8 @@ done
 | cline | open-vsx .vsix (saoudrizwan.claude-dev) | shipped-build constants (checkpoints, `cwdOnTaskInitialization`/`shadowGitConfigWorkTree`) + round trip incl. state.vscdb |
 | roo | open-vsx .vsix (RooVeterinaryInc.roo-cline — the archive's last release) | shipped-build constants + round trip incl. index-cache invalidation |
 | kilo | open-vsx .vsix (kilocode.kilo-code) | shipped-build constants + round trip incl. sha256 bucket renames |
-| qoder | qoder.com .deb — **links are JS-rendered, not scrapable; synthetic** | round trip incl. memories buckets + IDE state.vscdb |
-| trae | trae .deb — **same; synthetic** | round trip incl. IDE state.vscdb + ~/.trae |
+| qoder | official install script (`qoder.com/install` → `qoder`/`qodercli`) | real CLI + round trip incl. memories buckets + IDE state.vscdb |
+| trae | official version-manifest API → CDN `.deb` (`TraeCode_CN-linux-x64.deb`), `dpkg-deb -x` | unpacked IDE build + round trip incl. IDE state.vscdb + ~/.trae |
 
 ### The original agents (every adapter gets the same treatment)
 
@@ -72,19 +72,16 @@ done
 | antigravity | GUI IDE — synthetic | IDE ItemTable + `~/.gemini/antigravity` tmp markers round trip |
 | crush | GitHub release .deb (`charmbracelet/crush`) | real CLI + projects.json path/data_dir round trip |
 | droid | factory install script (`app.factory.ai/cli` → ~/.local/bin) | real CLI + sessions cwd + background processes round trip |
-| continue | **no public headless CLI anymore** (`@continue-dev/cli` and `continue-cli` are gone from npm; the CLI ships inside the IDE); synthetic | file:// workspace URIs + tag_catalog.dir round trip |
-| pi | npm `@mariozechner/pi` exposes only the `pi-pods` binary, not the agent; synthetic | `--encoded--` buckets + run-history identity cwd round trip |
+| continue | npm (`@continuedev/cli`, binary `cn`) | real CLI + file:// workspace URIs + tag_catalog.dir round trip |
+| pi | npm (`@earendil-works/pi-coding-agent`, binary `pi`) | real CLI + `--encoded--` buckets + run-history identity cwd round trip |
 | aider | PyPI (`aider-chat`) | real CLI + config absolute paths round trip |
 | ccconnect | npm (`cc-connect`) | real CLI + dir MRU + sha256[:8] session-file renames round trip |
 | zed | GUI editor — synthetic | threads.folder_paths round trip |
 | kimi | **Moonshot CDN binary** (`code.kimi.com/kimi-code/binaries/<ver>`) | **the incident reproduction**: full registry/bucket/wire/events state + derived-store invalidation, gated on the AGENT'S OWN `kimi session list` from the new path |
 
-Synthetic-only channels and why: continue (no public
-headless CLI exists anymore), pi (the npm package exposes only a
-`pi-pods` helper), qoder/trae (.deb links are JS-rendered), and the
-five GUI-only agents (zcode/cursor/windsurf/antigravity/zed). Every
-one of these still runs the full synthetic round trip as its hard
-gate. The kimi container is the pattern the Kimi Code incident
+Synthetic-only channels and why: the five GUI-only agents
+(zcode/cursor/windsurf/antigravity/zed). Every one of these still
+runs the full synthetic round trip as its hard gate. The kimi container is the pattern the Kimi Code incident
 motivated: disk greps alone proved insufficient (the
 cache/query-store resurrection), so its acceptance gate is the
 agent's own session listing from the migrated path.

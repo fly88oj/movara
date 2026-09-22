@@ -1,13 +1,14 @@
-# Continue verification container: npm-installs the real CLI (best
-# effort), then runs a scan/migrate/undo round trip (session
-# workspaceDirectory file:// URIs + index.sqlite tag_catalog.dir).
+# Continue verification container: npm-installs the real CLI
+# (@continuedev/cli, binary `cn`), then runs a scan/migrate/undo round
+# trip (session workspaceDirectory file:// URIs + index.sqlite
+# tag_catalog.dir).
 FROM rust:1.98-slim-bookworm
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g continue-cli && continue --version || echo "npm channel unreachable — synthetic verification proceeds"
+RUN npm install -g @continuedev/cli && cn --version
 
 WORKDIR /src
 COPY . .

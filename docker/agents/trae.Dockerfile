@@ -8,12 +8,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 dpkg \
     && rm -rf /var/lib/apt/lists/*
 
-# best effort: known CN distribution hosts
-RUN (curl -fL "https://lf-cdn.trae.cn/trae/trae-linux-x64.deb" -o /tmp/trae.deb || curl -fL "https://lf-cdn.trae.ai/trae/trae-linux-x64.deb" -o /tmp/trae.deb) \
+# the real IDE .deb via the official version manifest API (extracts
+# under usr/share/trae-cn)
+RUN URL=$(curl -fsSL "https://api.trae.cn/icube/api/v1/native/version/trae/cn/latest" | grep -oE 'https://lf-cdn[^"]*linux-x64\.deb' | head -1) \
+    && [ -n "$URL" ] && curl -fL "$URL" -o /tmp/trae.deb \
     && dpkg-deb -x /tmp/trae.deb /tmp/trae-extract \
-    && ls /tmp/trae-extract/opt \
-    && echo "trae .deb unpacked" \
-    || echo "deb channel unreachable — synthetic verification proceeds"
+    && ls /tmp/trae-extract/usr/share/trae-cn \
+    && echo "trae .deb unpacked from the official manifest"
 
 WORKDIR /src
 COPY . .
