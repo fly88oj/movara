@@ -201,6 +201,7 @@ src == dst は拒否します。
 | Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
 | Aider | `~/.aider.conf.yml` | 設定内の絶対パス |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | ディレクトリ MRU + ファイル名ハッシュ |
+| Kimi Code | `~/.kimi-code/` workspaces.json、session_index.jsonl、sessions/、file-history/、workspace-trust/ | `wd_<basename>_<sha256[:12]>` バケット（ディレクトリ+ファイル）+ workDir |
 
 非対応（意図的な判断）：
 

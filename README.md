@@ -203,6 +203,7 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
 | Aider | `~/.aider.conf.yml` | absolute paths in config |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | dir MRU + filename hash |
+| Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` bucket dirs+files + workDir |
 
 Not supported (by design):
 

@@ -450,3 +450,86 @@ fn protobuf_rewriter_roundtrip() {
     assert!(!ch2);
     assert_eq!(out2, vec![0x0a, 0x03, b'a', b'b', b'c', 0x10, 0x2a]);
 }
+
+#[test]
+fn kimi_buckets_files_and_index_all_move() {
+    let fx = Fixture::new("kimi");
+    fx.migrate(false);
+    let b_old = encodings::kimi_bucket(&fx.old);
+    let b_new = encodings::kimi_bucket(&fx.new);
+    let root = fx.ctx.h(".kimi-code");
+    // sessions/<bucket> dir renamed; file-history/ + workspace-trust/
+    // bucket FILES renamed
+    assert!(root.join(format!("sessions/{b_new}")).is_dir());
+    assert!(!root.join(format!("sessions/{b_old}")).exists());
+    assert!(root.join(format!("file-history/{b_new}")).is_file());
+    assert!(root.join(format!("workspace-trust/{b_new}")).is_file());
+    assert!(!root.join(format!("file-history/{b_old}")).exists());
+    assert!(!root.join(format!("workspace-trust/{b_old}")).exists());
+    // no stale bucket token anywhere; no old path outside the known
+    // chat-content layers (rewritten with --deep)
+    assert!(fx.grep(&b_old).is_empty(), "old bucket token must be gone");
+    assert!(
+        fx.grep(&fx.old).iter().all(|p| {
+            let n = p.to_string_lossy().replace('\\', "/");
+            n.ends_with("rollout-x.jsonl")
+                || n.ends_with("opencode/opencode.db")
+                || n.ends_with("run-history.jsonl")
+        }),
+        "unexpected leftover: {:?}",
+        fx.grep(&fx.old)
+    );
+    // workspaces.json: bucket key + root value
+    let ws: serde_json::Value = serde_json::from_str(&read(&root.join("workspaces.json"))).unwrap();
+    assert!(ws["workspaces"].as_object().unwrap().contains_key(&b_new));
+    assert_eq!(ws["workspaces"][&b_new]["root"], json!(fx.new));
+    assert_eq!(
+        ws["workspaces"][&b_new]["name"],
+        json!(encodings::basename(&fx.new))
+    );
+    // session_index: workDir + sessionDir through the new bucket
+    let idx: serde_json::Value =
+        serde_json::from_str(&read(&root.join("session_index.jsonl"))).unwrap();
+    assert_eq!(idx["workDir"], json!(fx.new));
+    let session_dir = idx["sessionDir"].as_str().unwrap().replace('\\', "/");
+    assert!(
+        session_dir.contains(&b_new),
+        "sessionDir through new bucket"
+    );
+    // state.json workDir + homedir; task cwd
+    let state: serde_json::Value = serde_json::from_str(&read(
+        &root.join(format!("sessions/{b_new}/session_1/state.json")),
+    ))
+    .unwrap();
+    assert_eq!(state["workDir"], json!(fx.new));
+    let homedir = state["agents"]["main"]["homedir"]
+        .as_str()
+        .unwrap()
+        .replace('\\', "/");
+    assert!(homedir.contains(&b_new), "homedir through new bucket");
+    let task: serde_json::Value = serde_json::from_str(&read(&root.join(format!(
+        "sessions/{b_new}/session_1/agents/main/tasks/bash-abc123.json"
+    ))))
+    .unwrap();
+    assert_eq!(task["cwd"], json!(fx.new));
+    // trust root follows the move
+    let trust: serde_json::Value =
+        serde_json::from_str(&read(&root.join(format!("workspace-trust/{b_new}")))).unwrap();
+    assert_eq!(trust["root"], json!(fx.new));
+    // the index cache's bare bucket id moved too (non-identity field,
+    // text-rewritten), and the LMDB marker is untouched
+    let cache = read(&root.join("sessions/.index-cache/scan.json"));
+    assert!(cache.contains(&b_new) && !cache.contains(&b_old));
+    assert_eq!(read(&root.join("search-index/CURRENT")), "ACME");
+    // the server event stream: workspace registry + session identity
+    // (bucket ids under generic keys, roots and cwds) all moved.
+    // JSON text carries Windows paths escaped, so compare forms
+    // normalized: escaped pairs and single backslashes both -> /
+    let norm = |s: &str| s.replace("\\\\", "/").replace('\\', "/");
+    let global = norm(&read(&root.join("server/events/__global__.jsonl")));
+    assert!(global.contains(&b_new) && !global.contains(&b_old));
+    assert!(global.contains(&norm(&fx.new)) && !global.contains(&norm(&fx.old)));
+    let session_evt = norm(&read(&root.join("server/events/session_1.jsonl")));
+    assert!(session_evt.contains(&b_new) && !session_evt.contains(&b_old));
+    assert!(session_evt.contains(&norm(&fx.new)) && !session_evt.contains(&norm(&fx.old)));
+}

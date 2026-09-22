@@ -85,6 +85,134 @@ impl Fixture {
         self.build_crush();
         self.build_ccconnect();
         self.build_aider();
+        self.build_kimi();
+    }
+
+    /// Kimi Code: wd_<basename>_<sha256[:12]> buckets — a sessions/
+    /// directory per bucket, file-history/ + workspace-trust/ FILES
+    /// named by the bucket, session_index/state/wire identity fields and
+    /// an index cache holding bare bucket ids
+    fn build_kimi(&self) {
+        let bucket = movara::encodings::kimi_bucket(&self.old);
+        let root = ".kimi-code";
+        let sess_dir = format!("{root}/sessions/{bucket}/session_1");
+        let agents_main = format!("{sess_dir}/agents/main");
+        self.wj(
+            &format!("{root}/workspaces.json"),
+            serde_json::json!({
+                "version": 1,
+                "workspaces": {
+                    bucket.clone(): {
+                        "root": self.old,
+                        "name": movara::encodings::basename(&self.old),
+                        "created_at": "2026-09-01T00:00:00.000Z",
+                        "last_opened_at": "2026-09-01T00:00:00.000Z",
+                    }
+                }
+            }),
+        );
+        self.wl(
+            &format!("{root}/session_index.jsonl"),
+            serde_json::json!({
+                "sessionId": "ses_1",
+                "sessionDir": self
+                    .ctx
+                    .h(&format!("{root}/sessions/{bucket}/session_1"))
+                    .to_string_lossy(),
+                "workDir": self.old,
+            }),
+        );
+        self.wj(
+            &format!("{sess_dir}/state.json"),
+            serde_json::json!({
+                "createdAt": "2026-09-01T00:00:00.000Z",
+                "title": "t",
+                "workDir": self.old,
+                "agents": {
+                    "main": {
+                        "homedir": self.ctx.h(&agents_main).to_string_lossy(),
+                        "type": "main",
+                        "parentAgentId": null,
+                    }
+                },
+            }),
+        );
+        self.w(
+            &format!("{agents_main}/wire.jsonl"),
+            &format!(
+                "{}\n{}\n",
+                serde_json::json!({"type": "metadata", "protocol_version": "1.4"}),
+                serde_json::json!({"type": "session.start", "workDir": self.old})
+            ),
+        );
+        self.wj(
+            &format!("{agents_main}/tasks/bash-abc123.json"),
+            serde_json::json!({"cwd": self.old, "command": "cargo build"}),
+        );
+        // bucket FILES under file-history/ (no paths inside) and
+        // workspace-trust/ ({"root": ...})
+        self.wj(
+            &format!("{root}/file-history/{bucket}"),
+            serde_json::json!({"sessions": [{"id": "session_1", "touchedAt": 1789975118890_i64}]}),
+        );
+        self.wj(
+            &format!("{root}/workspace-trust/{bucket}"),
+            serde_json::json!({"root": self.old, "trustedAt": 1789975118890_i64}),
+        );
+        // regenerable scan cache with a bare bucket id in a
+        // non-identity field
+        self.wj(
+            &format!("{root}/sessions/.index-cache/scan.json"),
+            serde_json::json!({
+                "version": 1,
+                "sessions": {
+                    "session_1": {"ws": bucket, "meta": "state.json", "mtimeMs": 1.5, "size": 100}
+                }
+            }),
+        );
+        // the background server's event stream: workspace registry
+        // events carry the bucket id + root; session events carry
+        // workspace_id + metadata.cwd
+        self.wl(
+            &format!("{root}/server/events/__global__.jsonl"),
+            serde_json::json!({
+                "kind": "event",
+                "seq": 1,
+                "envelope": {
+                    "type": "event.workspace.updated",
+                    "seq": 1,
+                    "session_id": null,
+                    "timestamp": "2026-09-01T00:00:00.000Z",
+                    "payload": {
+                        "type": "event.workspace.updated",
+                        "workspace": {"id": bucket, "root": self.old, "name": "n"}
+                    }
+                }
+            }),
+        );
+        self.wl(
+            &format!("{root}/server/events/session_1.jsonl"),
+            serde_json::json!({
+                "kind": "event",
+                "seq": 2,
+                "envelope": {
+                    "type": "event.session.created",
+                    "seq": 2,
+                    "session_id": "session_1",
+                    "timestamp": "2026-09-01T00:00:00.000Z",
+                    "payload": {
+                        "type": "event.session.created",
+                        "session": {
+                            "id": "session_1",
+                            "workspace_id": bucket,
+                            "metadata": {"cwd": self.old},
+                        }
+                    }
+                }
+            }),
+        );
+        // LMDB-style binary cache marker: must never be touched
+        self.w(&format!("{root}/search-index/CURRENT"), "ACME");
     }
 
     fn build_claude(&self) {

@@ -181,6 +181,7 @@ Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den A
 | Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
 | Aider | `~/.aider.conf.yml` | absolute Pfade in der Konfiguration |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | Verzeichnis-MRU + Dateinamen-Hash |
+| Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` Buckets (Verz.+Dateien) + workDir |
 
 Nicht unterstützt (bewusst so entschieden):
 

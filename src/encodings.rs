@@ -67,6 +67,13 @@ pub fn zcode_memory_key(path: &str) -> String {
     format!("{}-{}", basename(path), sha256_16(path))
 }
 
+/// Kimi Code workspace bucket: wd_<basename(root)>_<sha256(root)[:12]>.
+/// The basename rides verbatim (underscores and dashes both occur in
+/// real workspaces); only the hash disambiguates same-named roots.
+pub fn kimi_bucket(path: &str) -> String {
+    format!("wd_{}_{}", basename(path), &sha256_hex(path)[..12])
+}
+
 /// omp sessions bucket: canonicalized cwd, encoded relative to home when
 /// underneath, otherwise the full path; '/' (and any non-alnum) -> '-'.
 pub fn omp_bucket(path: &str, home: &str) -> String {
@@ -175,6 +182,7 @@ pub fn derived_tokens(old: &str, new: &str) -> Vec<(String, String)> {
         (sha256_16(old), sha256_16(new)),
         (md5_hex(old), md5_hex(new)),
         (zcode_memory_key(old), zcode_memory_key(new)),
+        (kimi_bucket(old), kimi_bucket(new)),
     ];
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();

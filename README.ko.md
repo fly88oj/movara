@@ -178,6 +178,7 @@ movara undo --id 20260903-131427-644777
 | Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
 | Aider | `~/.aider.conf.yml` | 설정 안의 절대 경로 |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | 디렉터리 MRU + 파일명 해시 |
+| Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` 버킷 디렉터리+파일 + workDir |
 
 지원하지 않음(의도된 결정):
 
