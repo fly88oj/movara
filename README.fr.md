@@ -190,6 +190,7 @@ Un `move` inter-hôtes ajoute l'arborescence du projet (avec `.git`) à l'échan
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | state.vscdb de l'IDE + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | définitions agents/hooks/skills |
 | Warp | `~/.local/share/warp/warp.db` | balayage générique des colonnes texte (schéma fermé) |
+| Open Interpreter | `~/.openinterpreter/` | rollout `payload.cwd`, `config.toml [projects]`, `state_*.sqlite threads.cwd` |
 
 Non pris en charge (volontairement) :
 

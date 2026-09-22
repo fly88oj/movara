@@ -884,3 +884,33 @@ fn warp_generic_text_column_sweep_moves_paths() {
         .unwrap();
     assert_eq!(score, 5);
 }
+
+#[test]
+fn openinterpreter_codex_shape_and_generic_memory_sweep() {
+    let fx = Fixture::new("units-oi");
+    fx.migrate(false);
+    let root = fx.ctx.h(".openinterpreter");
+    // rollout session_meta cwd (identity cascade)
+    let first = read(&root.join("sessions/2026/09/01/rollout-2026-09-01T00-00-00-x.jsonl"))
+        .lines()
+        .next()
+        .unwrap()
+        .to_string();
+    let meta: serde_json::Value = serde_json::from_str(&first).unwrap();
+    assert_eq!(meta["payload"]["cwd"], json!(fx.new));
+    // config.toml [projects] trust key follows
+    let cfg = read(&root.join("config.toml"));
+    assert!(cfg.contains(&fx.new) && !cfg.contains(&fx.old));
+    // threads.cwd (known shape)
+    let con = rusqlite::Connection::open(root.join("state_5.sqlite")).unwrap();
+    let cwd: String = con
+        .query_row("SELECT cwd FROM threads", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(cwd, fx.new);
+    // closed-schema memories db swept generically
+    let mem = rusqlite::Connection::open(root.join("memories_1.sqlite")).unwrap();
+    let body: String = mem
+        .query_row("SELECT body FROM memories", [], |r| r.get(0))
+        .unwrap();
+    assert!(body.contains(&fx.new) && !body.contains(&fx.old));
+}

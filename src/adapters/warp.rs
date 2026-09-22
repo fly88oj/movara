@@ -41,45 +41,6 @@ impl WarpAdapter {
     fn db(&self, ctx: &Ctx) -> PathBuf {
         self.data_dir(ctx).join("warp.db")
     }
-
-    /// every (table, text column) pair in the db
-    fn text_columns(con: &rusqlite::Connection) -> Vec<(String, String)> {
-        let mut out = Vec::new();
-        let mut tables: Vec<String> = Vec::new();
-        if let Ok(mut stmt) = con.prepare(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
-        ) {
-            if let Ok(rows) = stmt.query_map([], |r| r.get::<_, String>(0)) {
-                for t in rows.filter_map(|x| x.ok()) {
-                    tables.push(t);
-                }
-            }
-        }
-        for t in tables {
-            let tq = t.replace('\'', "''");
-            let mut stmt = match con.prepare(&format!("PRAGMA table_info('{tq}')")) {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
-            let cols = stmt
-                .query_map([], |r| Ok((r.get::<_, String>(1)?, r.get::<_, String>(2)?)))
-                .ok();
-            if let Some(rows) = cols {
-                for c in rows.filter_map(|x| x.ok()) {
-                    let ty = c.1.to_ascii_uppercase();
-                    // TEXT columns plus untyped (dynamic typing in sqlite)
-                    if ty.contains("TEXT")
-                        || ty.is_empty()
-                        || ty.contains("CHAR")
-                        || ty.contains("CLOB")
-                    {
-                        out.push((t.clone(), c.0));
-                    }
-                }
-            }
-        }
-        out
-    }
 }
 
 impl Adapter for WarpAdapter {
@@ -119,7 +80,7 @@ impl Adapter for WarpAdapter {
         if db.is_file() {
             if let Ok(con) = sqlite::open_ro(&db) {
                 let mut hits = 0usize;
-                for (t, c) in Self::text_columns(&con) {
+                for (t, c) in super::sqlite_text_columns(&con) {
                     let tq = t.replace('\'', "''");
                     let cq = c.replace('"', "\"\"");
                     let sql = format!("SELECT rowid FROM \"{tq}\" WHERE \"{cq}\" LIKE ?");
@@ -149,33 +110,7 @@ impl Adapter for WarpAdapter {
             backup.record_db(&db)?;
             if !backup.dry_run {
                 let con = sqlite::open_rw(&db)?;
-                let mut total = 0usize;
-                for (t, c) in Self::text_columns(&con) {
-                    let tq = t.replace('\'', "''");
-                    let cq = c.replace('"', "\"\"");
-                    // rowid-addressed, bound-parameter rewrite per column
-                    let select = format!(
-                        "SELECT rowid, \"{cq}\" FROM \"{tq}\" WHERE \"{cq}\" LIKE ? LIMIT 500"
-                    );
-                    for pat in spec.like_patterns() {
-                        let rows: Vec<(i64, String)> = {
-                            let mut stmt = con.prepare(&select)?;
-                            let it = stmt.query_map([pat], |r| {
-                                Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
-                            })?;
-                            it.filter_map(|x| x.ok()).collect()
-                        };
-                        for (rowid, value) in rows {
-                            let new_value = spec.replace(&value);
-                            if new_value != value {
-                                let update =
-                                    format!("UPDATE \"{tq}\" SET \"{cq}\" = ? WHERE rowid = ?");
-                                con.execute(&update, rusqlite::params![new_value, rowid])?;
-                                total += 1;
-                            }
-                        }
-                    }
-                }
+                let total = super::sqlite_text_sweep(&con, spec)?;
                 if total > 0 {
                     actions.push(mk(self.name(), "db", &db, &format!("{} rows", total)));
                 }

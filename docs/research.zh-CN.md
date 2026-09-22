@@ -211,3 +211,9 @@ GitHub 源码/官方文档核对（见各节来源）。除标注"未证实"外�
 - **既有适配器覆盖**：MiniMax Code 复用 `~/.local/share/opencode`（OpenCode 系；opencode 适配器已覆盖）；VS Code Copilot 聊天会话在 IDE 的 workspaceStorage（支持的 IDE 由 fork 机制覆盖）。
 - **相邻工具、非会话状态**：Backlog.md（项目任务 markdown）、编排器（Vibe Kanban、claude-squad、crystal/Nimbalyst、Conductor、claude-code-router——配置可嵌路径但无会话转录）。
 - **弱/不可验证的本地信号**：Junie（JetBrains；`~/.junie` 信任标记，会话子目录未证实）、Cody（v1.20 起聊天服务端同步；本地转录次要）、Refact.ai（自托管 Docker 卷）、灵码迁移前布局（已被 qoder-cn 取代，已覆盖）。
+### Open Interpreter（2026 Rust CLI）
+- 仓库已更名 openinterpreter/openinterpreter——Codex 重定基（codex-rs 树）；INTERPRETER_HOME 覆盖，CODEX_HOME 被刻意忽略。
+- `~/.openinterpreter` 镜像 Codex 布局：sessions/**/rollout-*.jsonl 的 session_meta payload.cwd（可选 .zst，二进制跳过）；state_*.sqlite `threads.cwd`（过期 cwd 会让会话从按目录过滤的列表与 resume --last 中静默消失）；config.toml [projects] 规范化路径信任键。memories/logs/goals 架构未公开——按通用文本列扫描。无路径派生名。
+
+### Plandex——改名安全，无需适配器
+- v1/v2 均为客户端-服务器架构：计划/版本/元数据在服务端（PLANDEX_BASE_DIR + Postgres，UUID 键控 git 仓库）；`~/.plandex-home-v2/` 按 projectId/planId 键控；项目内 `.plandex-v2/` 只有 projectId 映射、随目录移动。没有任何文件内嵌项目绝对路径——Context 文件路径为项目相对；无 git worktree。项目改名零破坏（服务端显示名仅装饰性）。

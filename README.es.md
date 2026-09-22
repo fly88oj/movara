@@ -215,6 +215,7 @@ Un `move` entre hosts añade el árbol del proyecto (con `.git`) al intercambio:
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | state.vscdb del IDE + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | definiciones agents/hooks/skills |
 | Warp | `~/.local/share/warp/warp.db` | barrido genérico de columnas de texto (esquema cerrado) |
+| Open Interpreter | `~/.openinterpreter/` | rollout `payload.cwd`, `config.toml [projects]`, `state_*.sqlite threads.cwd` |
 
 Sin soporte (por decisión de diseño):
 

@@ -211,6 +211,7 @@ src == dst は拒否します。
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills 定義 |
 | Warp | `~/.local/share/warp/warp.db` | 汎用テキスト列スイープ（クローズドスキーマ） |
+| Open Interpreter | `~/.openinterpreter/` | sessions ロールアウト `payload.cwd`、`config.toml [projects]`、`state_*.sqlite threads.cwd` |
 
 非対応（意図的な判断）：
 

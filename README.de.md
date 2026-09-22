@@ -191,6 +191,7 @@ Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den A
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills-Definitionen |
 | Warp | `~/.local/share/warp/warp.db` | generisches Text-Spalten-Sweep (geschlossenes Schema) |
+| Open Interpreter | `~/.openinterpreter/` | Rollout `payload.cwd`, `config.toml [projects]`, `state_*.sqlite threads.cwd` |
 
 Nicht unterstützt (bewusst so entschieden):
 

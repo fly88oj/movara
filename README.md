@@ -213,6 +213,7 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills definitions |
 | Warp | `~/.local/share/warp/warp.db` | generic text-column sweep (closed schema) |
+| Open Interpreter | `~/.openinterpreter/` | sessions rollout `payload.cwd`, `config.toml [projects]`, `state_*.sqlite threads.cwd` |
 
 Not supported (by design):
 

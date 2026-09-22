@@ -96,6 +96,49 @@ impl Fixture {
         self.build_trae();
         self.build_copilot();
         self.build_warp();
+        self.build_openinterpreter();
+    }
+
+    /// Open Interpreter: Codex layout re-rooted at ~/.openinterpreter
+    fn build_openinterpreter(&self) {
+        self.w(
+            ".openinterpreter/sessions/2026/09/01/rollout-2026-09-01T00-00-00-x.jsonl",
+            &format!(
+                "{}\n{}\n",
+                serde_json::json!({
+                    "type": "session_meta",
+                    "payload": {"id": "u1", "cwd": self.old}
+                }),
+                serde_json::json!({"type": "response_item", "payload": {"type": "message", "content": "hi"}})
+            ),
+        );
+        self.w(
+            ".openinterpreter/config.toml",
+            &format!("[projects.\"{}\"]\ntrust_level = \"trusted\"\n", self.old),
+        );
+        let db = self.ctx.h(".openinterpreter/state_5.sqlite");
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch(
+            "CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT, cwd TEXT NOT NULL);",
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO threads VALUES (?,?,?)",
+            rusqlite::params!["t1", "/x/rollout.jsonl", self.old],
+        )
+        .unwrap();
+        drop(con);
+        // a closed-schema db (memories) — swept generically
+        let mem = self.ctx.h(".openinterpreter/memories_1.sqlite");
+        let con2 = rusqlite::Connection::open(&mem).unwrap();
+        con2.execute_batch("CREATE TABLE memories (id INTEGER PRIMARY KEY, body TEXT);")
+            .unwrap();
+        con2.execute(
+            "INSERT INTO memories VALUES (?,?)",
+            rusqlite::params![1, format!("project lives at {}", self.old)],
+        )
+        .unwrap();
+        drop(con2);
     }
 
     /// Warp: synthetic warp-shaped db — closed real schema, the adapter

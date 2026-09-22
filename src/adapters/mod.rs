@@ -13,6 +13,7 @@ pub mod goose;
 pub mod gptme;
 pub mod kimi;
 pub mod misc;
+pub mod oi;
 pub mod opencode;
 pub mod openhands;
 pub mod qoder;
@@ -650,6 +651,73 @@ fn omp_buckets(ctx: &Ctx, spec: &ReplaceSpec) -> (String, String) {
 
 // ============================================================ registry
 
+/// every (table, text column) pair in a database, discovered at runtime
+/// via PRAGMA table_info — for closed or undocumented schemas
+pub fn sqlite_text_columns(con: &rusqlite::Connection) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut tables: Vec<String> = Vec::new();
+    if let Ok(mut stmt) = con
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+    {
+        if let Ok(rows) = stmt.query_map([], |r| r.get::<_, String>(0)) {
+            for t in rows.filter_map(|x| x.ok()) {
+                tables.push(t);
+            }
+        }
+    }
+    for t in tables {
+        let tq = t.replace('\'', "''");
+        if let Ok(mut stmt) = con.prepare(&format!("PRAGMA table_info('{tq}')")) {
+            if let Ok(rows) =
+                stmt.query_map([], |r| Ok((r.get::<_, String>(1)?, r.get::<_, String>(2)?)))
+            {
+                for c in rows.filter_map(|x| x.ok()) {
+                    let ty = c.1.to_ascii_uppercase();
+                    // TEXT columns plus untyped (dynamic typing in sqlite)
+                    if ty.contains("TEXT")
+                        || ty.is_empty()
+                        || ty.contains("CHAR")
+                        || ty.contains("CLOB")
+                    {
+                        out.push((t.clone(), c.0));
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// schema-agnostic rewrite: every PRAGMA-discovered text column whose
+/// value references the spec gets a row-by-row, bound-parameter update
+/// (rowid-addressed). Callers journal the db with record_db first.
+pub fn sqlite_text_sweep(con: &rusqlite::Connection, spec: &ReplaceSpec) -> Result<usize> {
+    let mut total = 0usize;
+    for (t, c) in sqlite_text_columns(con) {
+        let tq = t.replace('\'', "''");
+        let cq = c.replace('"', "\"\"");
+        let select =
+            format!("SELECT rowid, \"{cq}\" FROM \"{tq}\" WHERE \"{cq}\" LIKE ? LIMIT 500");
+        for pat in spec.like_patterns() {
+            let rows: Vec<(i64, String)> = {
+                let mut stmt = con.prepare(&select)?;
+                let it =
+                    stmt.query_map([pat], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?;
+                it.filter_map(|x| x.ok()).collect()
+            };
+            for (rowid, value) in rows {
+                let new_value = spec.replace(&value);
+                if new_value != value {
+                    let update = format!("UPDATE \"{tq}\" SET \"{cq}\" = ? WHERE rowid = ?");
+                    con.execute(&update, rusqlite::params![new_value, rowid])?;
+                    total += 1;
+                }
+            }
+        }
+    }
+    Ok(total)
+}
+
 /// agent processes currently running (pgrep -x over every adapter's
 /// process_names). The live gate for mv/migrate/move/receive: a running
 /// agent holds its registry in memory and re-persists it after the
@@ -704,6 +772,7 @@ pub fn all() -> Vec<Box<dyn Adapter>> {
         Box::new(trae::TraeAdapter),
         Box::new(copilot::CopilotAdapter),
         Box::new(warp::WarpAdapter),
+        Box::new(oi::OpenInterpreterAdapter),
     ]
 }
 

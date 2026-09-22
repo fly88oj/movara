@@ -188,6 +188,7 @@ movara undo --id 20260903-131427-644777
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills 정의 |
 | Warp | `~/.local/share/warp/warp.db` | 범용 텍스트 열 스윕(폐쇄 스키마) |
+| Open Interpreter | `~/.openinterpreter/` | sessions 롤아웃 `payload.cwd`, `config.toml [projects]`, `state_*.sqlite threads.cwd` |
 
 지원하지 않음(의도된 결정):
 

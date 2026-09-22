@@ -293,6 +293,27 @@ Qoder/Trae/Copilot/Kimi, against live on-disk state.
   acceptance test is the agent's own view (`kimi session list` in the
   new path + the API/UI), never disk greps alone.
 
+### Open Interpreter (2026 Rust CLI)
+- Repo renamed to openinterpreter/openinterpreter — a Codex rebase
+  (codex-rs tree, "Rebase Open Interpreter onto Codex 0.144.4");
+  INTERPRETER_HOME overrides, CODEX_HOME deliberately ignored.
+- `~/.openinterpreter` mirrors the Codex layout: sessions/**/rollout-*.jsonl
+  session_meta payload.cwd (optionally .zst, binary-skipped);
+  state_*.sqlite `threads.cwd` (a stale cwd silently drops sessions
+  from cwd-filtered lists and resume --last); config.toml [projects]
+  canonicalized-path trust keys. memories/logs/goals dbs have
+  undocumented schemas — swept generically (text-column discovery).
+  No path-derived names.
+
+### Plandex — rename-safe, no adapter needed
+- Client-server in both v1 and v2: plans/versions/metadata live on the
+  server (`PLANDEX_BASE_DIR` + Postgres, UUID-keyed git repos);
+  `~/.plandex-home-v2/` is keyed by projectId/planId; the project's
+  `.plandex-v2/` holds only a projectId mapping and moves with the
+  directory. NOTHING embeds the project's absolute path — Context
+  file paths are project-relative; no git worktrees exist. A project
+  rename breaks nothing (the server-side display Name is cosmetic).
+
 ## Census exclusions (documented out of scope)
 
 - **Cloud-only / server-side sessions**: Google Jules (CLI drives
