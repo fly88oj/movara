@@ -204,6 +204,7 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | Aider | `~/.aider.conf.yml` | absolute paths in config |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | dir MRU + filename hash |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` bucket dirs+files + workDir |
+| Goose (Block) | `~/.local/share/goose/sessions/sessions.db` + legacy `*.jsonl`, `~/.config/goose/` | `sessions.working_dir` + `working_dir` metadata + permission keys |
 
 Not supported (by design):
 

@@ -550,9 +550,10 @@ fn path_filtered_export_selects_and_rebases() {
         .filter(|e| e.file_type().is_file())
     {
         let raw = fs::read(e.path()).unwrap();
-        let text = String::from_utf8_lossy(&raw);
+        // boundary-aware: a plain substring check false-positives on
+        // SQLite cell concatenations (path cell + "2026-..." timestamp)
         assert!(
-            !text.contains(&sibling),
+            !common::boundary_contains(&raw, &sibling),
             "sibling project leaked: {}",
             e.path().display()
         );

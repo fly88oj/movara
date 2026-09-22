@@ -181,6 +181,7 @@ Un `move` inter-hôtes ajoute l'arborescence du projet (avec `.git`) à l'échan
 | Aider | `~/.aider.conf.yml` | chemins absolus dans la configuration |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | MRU de répertoires + hachage du nom de fichier |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | buckets `wd_<basename>_<sha256[:12]>` (dirs+fichiers) + workDir |
+| Goose (Block) | `~/.local/share/goose/sessions/sessions.db` + `*.jsonl` hérités, `~/.config/goose/` | `sessions.working_dir` + métadonnées `working_dir` + clés de permissions |
 
 Non pris en charge (volontairement) :
 

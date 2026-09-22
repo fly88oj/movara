@@ -6,6 +6,7 @@
 
 pub mod codex;
 pub mod gemini_family;
+pub mod goose;
 pub mod kimi;
 pub mod misc;
 pub mod opencode;
@@ -686,6 +687,7 @@ pub fn all() -> Vec<Box<dyn Adapter>> {
         Box::new(misc::CcConnectAdapter),
         Box::new(zed::ZedAdapter),
         Box::new(kimi::KimiCodeAdapter),
+        Box::new(goose::GooseAdapter),
     ]
 }
 

@@ -185,6 +185,7 @@ movara undo --id 20260903-131427-644777
 | Aider | `~/.aider.conf.yml` | 配置内绝对路径 |
 | cc-connect | `~/.cc-connect/dir_history.json` | 目录 MRU + 文件名哈希 |
 | Kimi Code | `~/.kimi-code/` workspaces.json、session_index.jsonl、sessions/、file-history/、workspace-trust/ | `wd_<basename>_<sha256[:12]>` 桶目录+文件 + workDir |
+| Goose（Block） | `~/.local/share/goose/sessions/sessions.db` + 旧版 `*.jsonl`、`~/.config/goose/` | `sessions.working_dir` + `working_dir` 元数据 + 权限键 |
 
 不支持（经调研确认）：GitHub Copilot CLI（云端权威）、Amp（服务端存储）、
 claude-code-router（无路径键控状态）。

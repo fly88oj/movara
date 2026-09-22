@@ -82,7 +82,9 @@ fn no_old_references_left_after_full_migration() {
         let name = p.to_string_lossy().replace('\\', "/");
         let is_content = name.ends_with("rollout-x.jsonl")
             || name.ends_with("opencode/opencode.db")
-            || name.ends_with("run-history.jsonl");
+            || name.ends_with("run-history.jsonl")
+            // goose messages.content_json (chat body in the db)
+            || name.ends_with("goose/sessions/sessions.db");
         assert!(is_content, "unexpected leftover: {}", name);
     }
     // derived sha256 tokens must be gone too
@@ -374,6 +376,7 @@ fn pi_droid_ccconnect_aider_crush() {
                     n.ends_with("rollout-x.jsonl")
                         || n.ends_with("opencode/opencode.db")
                         || n.ends_with("run-history.jsonl")
+                        || n.ends_with("goose/sessions/sessions.db")
                 })
     );
     // aider conf
@@ -475,6 +478,7 @@ fn kimi_buckets_files_and_index_all_move() {
             n.ends_with("rollout-x.jsonl")
                 || n.ends_with("opencode/opencode.db")
                 || n.ends_with("run-history.jsonl")
+                || n.ends_with("goose/sessions/sessions.db")
         }),
         "unexpected leftover: {:?}",
         fx.grep(&fx.old)
@@ -580,4 +584,36 @@ fn live_agent_processes_reports_nothing_for_idle_names() {
     );
     // the real registry never panics, whatever is running locally
     let _ = movara::adapters::live_agent_processes(&movara::adapters::all());
+}
+
+#[test]
+fn goose_working_dir_legacy_metadata_and_permissions_move() {
+    let fx = Fixture::new("units-goose");
+    fx.migrate(false);
+    let con = rusqlite::Connection::open(fx.ctx.d("goose/sessions/sessions.db")).unwrap();
+    let wd: String = con
+        .query_row("SELECT working_dir FROM sessions", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(wd, fx.new);
+    drop(con);
+    let first = read(&fx.ctx.d("goose/sessions/20260901_000000.jsonl"))
+        .lines()
+        .next()
+        .unwrap()
+        .to_string();
+    let meta: serde_json::Value = serde_json::from_str(&first).unwrap();
+    assert_eq!(meta["working_dir"], json!(fx.new));
+    let perms: serde_json::Value =
+        serde_json::from_str(&read(&fx.ctx.c("goose/permissions/tool_permissions.json"))).unwrap();
+    assert!(
+        perms["per_project"]
+            .as_object()
+            .unwrap()
+            .contains_key(&fx.new),
+        "permission keys follow the move"
+    );
+    assert!(!perms["per_project"]
+        .as_object()
+        .unwrap()
+        .contains_key(&fx.old));
 }

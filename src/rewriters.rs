@@ -33,6 +33,7 @@ const JSON_FIELD_KEYS: &[&str] = &[
     "homedir",
     "sessionDir",
     "workspaceId",
+    "working_dir",
     "data_dir",
     "workDir",
     "work_dir",

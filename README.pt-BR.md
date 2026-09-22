@@ -180,6 +180,7 @@ Um `move` entre hosts adiciona a árvore do projeto (com `.git`) à troca: `--st
 | Aider | `~/.aider.conf.yml` | caminhos absolutos na configuração |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | MRU de diretórios + hash no nome do arquivo |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | buckets `wd_<basename>_<sha256[:12]>` (dirs+arquivos) + workDir |
+| Goose (Block) | `~/.local/share/goose/sessions/sessions.db` + `*.jsonl` legados, `~/.config/goose/` | `sessions.working_dir` + metadados `working_dir` + chaves de permissão |
 
 Não suportado (por decisão de projeto):
 

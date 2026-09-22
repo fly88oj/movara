@@ -86,6 +86,49 @@ impl Fixture {
         self.build_ccconnect();
         self.build_aider();
         self.build_kimi();
+        self.build_goose();
+    }
+
+    /// Goose: data/sessions/sessions.db (sessions.working_dir) + a
+    /// legacy flat jsonl whose first line is session metadata, plus a
+    /// config-dir permissions file
+    fn build_goose(&self) {
+        let db = self.ctx.d("goose/sessions/sessions.db");
+        fs::create_dir_all(db.parent().unwrap()).unwrap();
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch(
+            "CREATE TABLE sessions (id TEXT PRIMARY KEY, description TEXT, \
+             working_dir TEXT NOT NULL, created_at TEXT); \
+             CREATE TABLE messages (id TEXT PRIMARY KEY, session_id TEXT, content_json TEXT);",
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO sessions VALUES (?,?,?,?)",
+            rusqlite::params!["20260901_1", "s", self.old, "2026-09-01T00:00:00Z"],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO messages VALUES (?,?,?)",
+            rusqlite::params![
+                "m1",
+                "20260901_1",
+                format!("{{\"text\":\"work in {}\"}}", self.old)
+            ],
+        )
+        .unwrap();
+        drop(con);
+        self.w(
+            ".local/share/goose/sessions/20260901_000000.jsonl",
+            &format!(
+                "{}\n{}\n",
+                serde_json::json!({"id": "legacy1", "working_dir": self.old}),
+                serde_json::json!({"role": "user", "content": "hi"})
+            ),
+        );
+        self.wj(
+            ".config/goose/permissions/tool_permissions.json",
+            serde_json::json!({"version": 1, "per_project": {self.old.clone(): {"developer-tools": true}}}),
+        );
     }
 
     /// Kimi Code: wd_<basename>_<sha256[:12]> buckets — a sessions/
@@ -736,4 +779,27 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.tmp);
     }
+}
+
+/// boundary-aware containment over raw (possibly binary) bytes: the
+/// needle counts only as a whole token, never as a fragment glued to
+/// adjacent name bytes — the same discipline the engine enforces.
+/// Plain substring checks over SQLite pages false-positive on cell
+/// concatenations (a path cell followed by a "2026-..." timestamp
+/// contains the literal bytes of "<path>2").
+pub fn boundary_contains(raw: &[u8], needle: &str) -> bool {
+    let nb = needle.as_bytes();
+    let is_name = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'.' || b == b'-';
+    let mut from = 0usize;
+    while let Some(pos) = memchr::memmem::find(&raw[from..], nb) {
+        let i = from + pos;
+        let end = i + nb.len();
+        let left_ok = i == 0 || !is_name(raw[i - 1]);
+        let right_ok = end >= raw.len() || !is_name(raw[end]);
+        if left_ok && right_ok {
+            return true;
+        }
+        from = i + 1;
+    }
+    false
 }
