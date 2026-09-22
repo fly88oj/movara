@@ -210,6 +210,7 @@ src == dst は拒否します。
 | Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<account>/projects/<dash>/` |
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills 定義 |
+| Warp | `~/.local/share/warp/warp.db` | 汎用テキスト列スイープ（クローズドスキーマ） |
 
 非対応（意図的な判断）：
 

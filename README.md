@@ -212,6 +212,7 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<account>/projects/<dash>/` |
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills definitions |
+| Warp | `~/.local/share/warp/warp.db` | generic text-column sweep (closed schema) |
 
 Not supported (by design):
 

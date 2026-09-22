@@ -190,6 +190,7 @@ Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den A
 | Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<Konto>/projects/<dash>/` |
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills-Definitionen |
+| Warp | `~/.local/share/warp/warp.db` | generisches Text-Spalten-Sweep (geschlossenes Schema) |
 
 Nicht unterstützt (bewusst so entschieden):
 

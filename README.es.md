@@ -214,6 +214,7 @@ Un `move` entre hosts añade el árbol del proyecto (con `.git`) al intercambio:
 | Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | state.vscdb del IDE + `memories/<cuenta>/projects/<dash>/` |
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | state.vscdb del IDE + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | definiciones agents/hooks/skills |
+| Warp | `~/.local/share/warp/warp.db` | barrido genérico de columnas de texto (esquema cerrado) |
 
 Sin soporte (por decisión de diseño):
 

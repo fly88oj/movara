@@ -852,3 +852,27 @@ fn copilot_definitions_move() {
         serde_json::from_str(&read(&fx.ctx.h(".copilot/agents/review.json"))).unwrap();
     assert_eq!(a["cwd"], json!(fx.new));
 }
+
+#[test]
+fn warp_generic_text_column_sweep_moves_paths() {
+    let fx = Fixture::new("units-warp");
+    fx.migrate(false);
+    let con = rusqlite::Connection::open(fx.ctx.dl("warp/warp.db")).unwrap();
+    let cwd: String = con
+        .query_row("SELECT cwd FROM launches", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(cwd, fx.new);
+    let uri: String = con
+        .query_row("SELECT workspace_uri FROM agent_runs", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(uri, format!("file://{}", fx.new));
+    // untouched non-path columns keep their values
+    let cmd: String = con
+        .query_row("SELECT cmd FROM launches", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(cmd, "cargo build");
+    let score: i64 = con
+        .query_row("SELECT score FROM agent_runs", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(score, 5);
+}

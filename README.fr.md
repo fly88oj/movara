@@ -189,6 +189,7 @@ Un `move` inter-hôtes ajoute l'arborescence du projet (avec `.git`) à l'échan
 | Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | state.vscdb de l'IDE + `memories/<compte>/projects/<dash>/` |
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | state.vscdb de l'IDE + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | définitions agents/hooks/skills |
+| Warp | `~/.local/share/warp/warp.db` | balayage générique des colonnes texte (schéma fermé) |
 
 Non pris en charge (volontairement) :
 

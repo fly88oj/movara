@@ -18,6 +18,7 @@ pub mod openhands;
 pub mod qoder;
 pub mod trae;
 pub mod vscode_family;
+pub mod warp;
 pub mod zcode;
 pub mod zed;
 
@@ -702,6 +703,7 @@ pub fn all() -> Vec<Box<dyn Adapter>> {
         Box::new(qoder::QoderAdapter),
         Box::new(trae::TraeAdapter),
         Box::new(copilot::CopilotAdapter),
+        Box::new(warp::WarpAdapter),
     ]
 }
 

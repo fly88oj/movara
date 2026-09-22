@@ -94,6 +94,32 @@ impl Fixture {
         self.build_qoder();
         self.build_trae();
         self.build_copilot();
+        self.build_warp();
+    }
+
+    /// Warp: synthetic warp-shaped db — closed real schema, the adapter
+    /// sweeps PRAGMA-discovered text columns generically
+    fn build_warp(&self) {
+        let db = self.ctx.dl("warp/warp.db");
+        fs::create_dir_all(db.parent().unwrap()).unwrap();
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch(
+            "CREATE TABLE launches (id INTEGER PRIMARY KEY, cwd TEXT, cmd TEXT); \
+             CREATE TABLE agent_runs (id INTEGER PRIMARY KEY, prompt TEXT, \
+             workspace_uri TEXT, score INTEGER);",
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO launches VALUES (?,?,?)",
+            rusqlite::params![1, self.old, "cargo build"],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO agent_runs VALUES (?,?,?,?)",
+            rusqlite::params![1, "fix it", format!("file://{}", self.old), 5],
+        )
+        .unwrap();
+        drop(con);
     }
 
     /// Qoder/Lingma: VS Code fork IDE state + memories projects buckets

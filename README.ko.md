@@ -187,6 +187,7 @@ movara undo --id 20260903-131427-644777
 | Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<account>/projects/<dash>/` |
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
 | GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills 정의 |
+| Warp | `~/.local/share/warp/warp.db` | 범용 텍스트 열 스윕(폐쇄 스키마) |
 
 지원하지 않음(의도된 결정):
 
