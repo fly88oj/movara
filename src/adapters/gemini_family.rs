@@ -20,6 +20,7 @@ use crate::encodings;
 use crate::rewriters;
 use crate::spec::ReplaceSpec;
 use anyhow::Result;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub struct GeminiAdapter;
@@ -394,6 +395,25 @@ macro_rules! fork_impl {
                                 &old_d,
                                 &format!("-> {}", new_d.display()),
                             ));
+                        }
+                    }
+                }
+                // the ownership marker is a plain-text dotfile the
+                // extension dispatch would skip (no extension): rewrite
+                // it explicitly wherever it sits under the hash dirs —
+                // the container verification caught forks shipping
+                // renames while the marker still named the old path
+                for base in self.hash_dirs(ctx) {
+                    if let Ok(entries) = std::fs::read_dir(&base) {
+                        for e in entries.filter_map(|x| x.ok()) {
+                            let marker = e.path().join(".project_root");
+                            if marker.is_file() {
+                                if let Ok(raw) = fs::read_to_string(&marker) {
+                                    if spec.maybe_contains(raw.as_bytes()) {
+                                        rewriters::rewrite_text_file(&marker, spec, backup)?;
+                                    }
+                                }
+                            }
                         }
                     }
                 }

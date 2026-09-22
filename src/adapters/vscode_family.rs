@@ -39,11 +39,19 @@ fn codeium_roots(root: &Path) -> Vec<PathBuf> {
 }
 
 fn codeium_text_roots(root: &Path) -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = ["codemaps", "context_state", "code_tracker", "database"]
-        .iter()
-        .map(|rel| root.join(rel))
-        .filter(|p| p.is_dir())
-        .collect();
+    // "tmp" carries the gemini-fork layout under ~/.gemini/antigravity
+    // (slug dirs with .project_root ownership markers)
+    let mut out: Vec<PathBuf> = [
+        "codemaps",
+        "context_state",
+        "code_tracker",
+        "database",
+        "tmp",
+    ]
+    .iter()
+    .map(|rel| root.join(rel))
+    .filter(|p| p.is_dir())
+    .collect();
     let mj = root.join("mcp_config.json");
     if mj.is_file() {
         out.push(mj);

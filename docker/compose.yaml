@@ -74,3 +74,98 @@ services:
     build:
       context: ..
       dockerfile: docker/agents/trae.Dockerfile
+
+  claude:
+    build:
+      context: ..
+      dockerfile: docker/agents/claude.Dockerfile
+
+  codex:
+    build:
+      context: ..
+      dockerfile: docker/agents/codex.Dockerfile
+
+  gemini:
+    build:
+      context: ..
+      dockerfile: docker/agents/gemini.Dockerfile
+
+  qwen:
+    build:
+      context: ..
+      dockerfile: docker/agents/qwen.Dockerfile
+
+  iflow:
+    build:
+      context: ..
+      dockerfile: docker/agents/iflow.Dockerfile
+
+  opencode:
+    build:
+      context: ..
+      dockerfile: docker/agents/opencode.Dockerfile
+
+  omp:
+    build:
+      context: ..
+      dockerfile: docker/agents/omp.Dockerfile
+
+  zcode:
+    build:
+      context: ..
+      dockerfile: docker/agents/zcode.Dockerfile
+
+  cursor:
+    build:
+      context: ..
+      dockerfile: docker/agents/cursor.Dockerfile
+
+  windsurf:
+    build:
+      context: ..
+      dockerfile: docker/agents/windsurf.Dockerfile
+
+  antigravity:
+    build:
+      context: ..
+      dockerfile: docker/agents/antigravity.Dockerfile
+
+  crush:
+    build:
+      context: ..
+      dockerfile: docker/agents/crush.Dockerfile
+
+  droid:
+    build:
+      context: ..
+      dockerfile: docker/agents/droid.Dockerfile
+
+  continue:
+    build:
+      context: ..
+      dockerfile: docker/agents/continue.Dockerfile
+
+  pi:
+    build:
+      context: ..
+      dockerfile: docker/agents/pi.Dockerfile
+
+  aider:
+    build:
+      context: ..
+      dockerfile: docker/agents/aider.Dockerfile
+
+  ccconnect:
+    build:
+      context: ..
+      dockerfile: docker/agents/ccconnect.Dockerfile
+
+  zed:
+    build:
+      context: ..
+      dockerfile: docker/agents/zed.Dockerfile
+
+  kimi:
+    build:
+      context: ..
+      dockerfile: docker/agents/kimi.Dockerfile
