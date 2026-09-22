@@ -5,12 +5,14 @@
 //! All SQL in adapters is inline literals executed with bound parameters.
 
 pub mod cline;
+pub mod codebuff;
 pub mod codex;
 pub mod gemini_family;
 pub mod goose;
 pub mod kimi;
 pub mod misc;
 pub mod opencode;
+pub mod openhands;
 pub mod vscode_family;
 pub mod zcode;
 pub mod zed;
@@ -690,6 +692,8 @@ pub fn all() -> Vec<Box<dyn Adapter>> {
         Box::new(kimi::KimiCodeAdapter),
         Box::new(goose::GooseAdapter),
         Box::new(cline::ClineFamilyAdapter),
+        Box::new(openhands::OpenHandsAdapter),
+        Box::new(codebuff::CodebuffAdapter),
     ]
 }
 

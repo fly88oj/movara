@@ -184,6 +184,8 @@ Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den A
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` Buckets (Verz.+Dateien) + workDir |
 | Goose (Block) | `~/.local/share/goose/sessions/sessions.db` + Legacy-`*.jsonl`, `~/.config/goose/` | `sessions.working_dir` + `working_dir`-Metadaten + Berechtigungsschlüssel |
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | Task-`path`-Felder + `workspace`/`cwdOnTaskInitialization` + Checkpoint-`core.worktree` + cwdHash/sha256-Buckets |
+| OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
+| Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | Basename-Bucket + run-state `cwd` |
 
 Nicht unterstützt (bewusst so entschieden):
 

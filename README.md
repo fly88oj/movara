@@ -206,6 +206,8 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` bucket dirs+files + workDir |
 | Goose (Block) | `~/.local/share/goose/sessions/sessions.db` + legacy `*.jsonl`, `~/.config/goose/` | `sessions.working_dir` + `working_dir` metadata + permission keys |
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | task `path` fields + `workspace`/`cwdOnTaskInitialization` + checkpoints `core.worktree` + cwdHash/sha256 buckets |
+| OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
+| Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bare-basename bucket + run-state `cwd` |
 
 Not supported (by design):
 

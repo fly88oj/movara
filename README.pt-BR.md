@@ -182,6 +182,8 @@ Um `move` entre hosts adiciona a árvore do projeto (com `.git`) à troca: `--st
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | buckets `wd_<basename>_<sha256[:12]>` (dirs+arquivos) + workDir |
 | Goose (Block) | `~/.local/share/goose/sessions/sessions.db` + `*.jsonl` legados, `~/.config/goose/` | `sessions.working_dir` + metadados `working_dir` + chaves de permissão |
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | campos `path` das tarefas + `workspace`/`cwdOnTaskInitialization` + `core.worktree` dos checkpoints + buckets cwdHash/sha256 |
+| OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
+| Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bucket por basename + `cwd` do run-state |
 
 Não suportado (por decisão de projeto):
 

@@ -187,6 +187,8 @@ movara undo --id 20260903-131427-644777
 | Kimi Code | `~/.kimi-code/` workspaces.json、session_index.jsonl、sessions/、file-history/、workspace-trust/ | `wd_<basename>_<sha256[:12]>` 桶目录+文件 + workDir |
 | Goose（Block） | `~/.local/share/goose/sessions/sessions.db` + 旧版 `*.jsonl`、`~/.config/goose/` | `sessions.working_dir` + `working_dir` 元数据 + 权限键 |
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | 任务 `path` 字段 + `workspace`/`cwdOnTaskInitialization` + 检查点 `core.worktree` + cwdHash/sha256 桶 |
+| OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
+| Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | 裸 basename 桶 + run-state `cwd` |
 
 不支持（经调研确认）：GitHub Copilot CLI（云端权威）、Amp（服务端存储）、
 claude-code-router（无路径键控状态）。

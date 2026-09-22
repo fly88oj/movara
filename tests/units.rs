@@ -705,3 +705,37 @@ fn cline_family_buckets_shadow_gits_and_task_history_move() {
         .unwrap();
     assert_eq!(other, "{\"note\": \"not ours\"}");
 }
+
+#[test]
+fn openhands_project_buckets_and_working_dir_move() {
+    let fx = Fixture::new("units-oh");
+    fx.migrate(false);
+    let old_h = movara::encodings::sha256_hex(&fx.old);
+    let new_h = movara::encodings::sha256_hex(&fx.new);
+    let root = fx.ctx.h(".openhands");
+    assert!(root.join(format!("projects/{new_h}")).is_dir());
+    assert!(!root.join(format!("projects/{old_h}")).exists());
+    let evt: serde_json::Value = serde_json::from_str(&read(
+        &root.join("conversations/conv1/events/event-00001-abc.json"),
+    ))
+    .unwrap();
+    assert_eq!(evt["payload"]["session"]["metadata"]["cwd"], json!(fx.new));
+    let settings: serde_json::Value =
+        serde_json::from_str(&read(&root.join("agent_settings.json"))).unwrap();
+    assert_eq!(settings["working_dir"], json!(fx.new));
+}
+
+#[test]
+fn codebuff_basename_bucket_and_run_state_move() {
+    let fx = Fixture::new("units-cb");
+    fx.migrate(false);
+    let old_b = movara::encodings::basename(&fx.old);
+    let new_b = movara::encodings::basename(&fx.new);
+    let root = fx.ctx.c("manicode/projects");
+    let chat = "chats/2026-09-01T00-00-00-000Z";
+    assert!(root.join(&new_b).join(chat).is_dir());
+    assert!(!root.join(&old_b).exists());
+    let rs: serde_json::Value =
+        serde_json::from_str(&read(&root.join(&new_b).join(chat).join("run-state.json"))).unwrap();
+    assert_eq!(rs["sessionState"]["cwd"], json!(fx.new));
+}

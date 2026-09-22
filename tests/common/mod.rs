@@ -88,6 +88,45 @@ impl Fixture {
         self.build_kimi();
         self.build_goose();
         self.build_cline();
+        self.build_openhands();
+        self.build_codebuff();
+    }
+
+    /// OpenHands: ~/.openhands conversations/<uuid>/events + base
+    /// state working_dir + projects/<sha256(realpath)> prompt history
+    fn build_openhands(&self) {
+        let h = &self.old;
+        self.wj(
+            ".openhands/conversations/conv1/events/event-00001-abc.json",
+            serde_json::json!({
+                "type": "event.session.created",
+                "payload": {"session": {"id": "conv1", "metadata": {"cwd": h}}}
+            }),
+        );
+        self.wj(
+            ".openhands/agent_settings.json",
+            serde_json::json!({"working_dir": h, "model": "x"}),
+        );
+        let p = movara::encodings::sha256_hex(h);
+        self.wj(
+            &format!(".openhands/projects/{p}/prompt_history.json"),
+            serde_json::json!({"prompts": ["hi"]}),
+        );
+    }
+
+    /// Codebuff/Freebuff: ~/.config/manicode/projects/<basename>/
+    /// chats/<ts>/ with run-state sessionState cwd
+    fn build_codebuff(&self) {
+        let base = movara::encodings::basename(&self.old);
+        let chat = format!(".config/manicode/projects/{base}/chats/2026-09-01T00-00-00-000Z");
+        self.wj(
+            &format!("{chat}/chat-meta.json"),
+            serde_json::json!({"messageCount": 2, "firstPrompt": "hi"}),
+        );
+        self.wj(
+            &format!("{chat}/run-state.json"),
+            serde_json::json!({"sessionState": {"cwd": self.old, "note": "x"}}),
+        );
     }
 
     /// Cline family: one globalStorage per marketplace id under the
