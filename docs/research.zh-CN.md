@@ -164,3 +164,50 @@ GitHub 源码/官方文档核对（见各节来源）。除标注"未证实"外�
 - Zed: zed-industries/zed crates/{agent/src/db.rs, util/src/path_list.rs, paths/src/paths.ts}; discussions #32335
 - Copilot: docs.github.com copilot-cli chronicle / overview; jonmagic.com posts
 - Amp: ampcode.com/security; docs.rs/ampcode
+## 2026-09-22 市场普查增补（11 个新 Agent）
+
+普查来源：社区/awesome 列表、编排类项目支持矩阵（Vibe Kanban、claude-code-router 等）、GitHub topics。约 30 个候选中，以下 12 个具备可验证的本地会话/历史存储并已落地适配器；存储事实均对照各项目开源仓库核实，Qoder/Trae/Copilot/Kimi 另经本机真实状态验证。
+
+### Goose（Block）— 54.5k★
+- `~/.local/share/goose/sessions/sessions.db`（SQLite/WAL/schema v9）：`sessions.working_dir`。旧版为扁平 `sessions/*.jsonl`，首行会话元数据含 `working_dir`。
+- 配置 `~/.config/goose/permissions/tool_permissions.json` 按绝对路径键控。
+- 跨 OS 根按 etcetera 策略（macOS `Block.block.goose` bundle 目录；Windows `%APPDATA%\Block\goose`）。无路径派生桶名；`messages.content_json` 属正文层（--deep）。
+
+### Cline / Roo Code / Kilo Code（VS Code 扩展家族）
+- 每个市场 id 一个 globalStorage（`saoudrizwan.claude-dev`、`rooveterinaryinc.roo-cline`、`kilocode.kilo-code`），出现在每个所运行的 IDE（Code/Cursor/Windsurf/VSCodium/vscode-server）下。
+- 任务历史：Roo `tasks/_index.json` + `history_item.json`（`workspace` 字段）；Cline 4.x `state/taskHistory.json`（`cwdOnTaskInitialization`/旧 `shadowGitConfigWorkTree`）；Cline ≤3.x 与经典 Kilo 存于 IDE 的 state.vscdb ItemTable（按扩展键行级限定重写）。
+- 检查点是影子 git，`.git/config core.worktree` 为工作区绝对路径——过期则扩展拒绝恢复。Cline ≤3.x 键为 `checkpoints/<cwdHash>/`（多项式哈希 ×31、u32、UTF-16 码元、十进制——仅按精确名改名，刻意不作文本针）；Roo/Kilo 按任务键控；经典 Kilo 另有 `checkpoints/<sha256(cwd)[:8]>/` 与 `sessions/<sha256[:16]>/`。
+- Roo 的 `roo-index-cache-<sha256>.json` 可再生，迁移时删除（派生存储失效）。Roo Code 已于 2026-05 归档，磁盘上常见遗留状态。
+
+### OpenHands
+- `~/.openhands`：`conversations/<uuid>/events/event-*.json`（UUID 键控）、`agent_settings.json` 的 `working_dir`、`projects/<sha256(realpath(cwd))>/prompt_history.json`。云端会话存储为 stub。
+
+### Codebuff / Freebuff
+- `~/.config/manicode/projects/<basename>/chats/<timestamp>/`（改名后旧配置名沿用）。项目键为裸 basename——同名项目上游即共享存储（已记录的设计怪癖）；改名碰撞时大声拒绝。run-state.json 的 sessionState 内嵌 cwd。
+
+### gptme
+- `~/.local/share/gptme/logs/<YYYY-MM-DD>-<name>/`——扁平，名字来自日期+随机/用户/LLM 命名，与路径无关。项目链接是 `config.toml [chat] workspace`，home 下保存为**波浪号缩写形态**（两种形态都重写；spec 机制会把 "~" 路径接到 CWD，故波浪号形态用专用边界替换）。`workspace` 是指向项目的符号链接（重定向、永不跟随）。消息 `files` 列表携带附件路径。
+
+### Qoder / 通义灵码（CN）
+- IDE 为 VS Code fork（`~/.config/Qoder` 的 state.vscdb + workspace 存储）。home 根 `~/.qoder`：`memories/<账户哈希>/projects/<dash 编码路径>/**`——项目层是经典 dash 编码；上层 8-hex 桶为账户键控、非路径派生。灵码 CN 版已迁移到 `~/.lingma/qoder-cn`，memories 布局相同。灵码自身 `index/` 为二进制可再生索引（不动）。
+
+### Trae（字节）
+- VS Code fork 状态在 `~/.config/Trae CN`（CN 版应用目录带空格；国际版为 `Trae`）+ 薄定义根 `~/.trae`（agents/skills/mcp.json）。
+
+### GitHub Copilot CLI
+- `~/.copilot` 的 agents/hooks/skills 定义。实测 GA 安装在该根下无会话转录；定义层即本地承载面。
+
+### Warp
+- `~/.local/share/warp/warp.db`（macOS `~/.warp`）。闭源未公开 schema：适配器运行时经 PRAGMA table_info 发现全部表的 TEXT 列并按行泛化重写（边界感知模式、绑定参数）；整库记账可撤销。仅经合成 db 验证——无真实样本（已在研究注记中说明）。
+
+### Kimi Code（月之暗面）——已真机端到端验证
+- `~/.kimi-code`：桶 `wd_<basename(root)>_<sha256(root)[:12]>`（真机 34/34 命中）命名 sessions/ 目录与 file-history/、workspace-trust/ **文件**；workspaces.json（桶键+root+显示名）；session_index.jsonl（sessionDir/workDir）；每会话 state.json（workDir+homedir）与 wire.jsonl（`runtime.set_binding.workspaceId` 绑定会话与工作区）；server 事件流（`event.workspace.updated` 载荷 id 在泛型键下）。
+- **派生存储持有迁移前元数据、必须失效**：`cache/query-store`（分片 WAL+generations 物化视图，server 的会话/工作区查询全走它——失效前永不回读权威文件，grep 不可见，靠 strace 现形）、`sessions/.index-cache`、`search-index`。三者迁移时删除、下次启动重建。真实事故：权威层全干净而陈旧 store 在 Web UI 复活旧工作区——验收必须用 Agent 自身视角（新路径 `kimi session list` + API/UI），磁盘 grep 干净不算数。
+
+## 普查排除项（记录在案的范围外）
+
+- **纯云端/服务端会话**：Google Jules（CLI 驱动云端会话）、Devin、Replit Agent、Lovable、Bolt.new、v0、Firebase Studio、Roomote（Roo 关停后的云产品）、Sweep（2026-04 关停）、MiniMax Agent（web）、CodeGeeX web 聊天。
+- **混合型、仅本地配置**：Amp（线程在服务端 ampcode.com/feed；本地 `~/.local/share/amp` 为配置与线程镜像，内部格式未公开且版本不稳定——无承重内容需重键）。
+- **既有适配器覆盖**：MiniMax Code 复用 `~/.local/share/opencode`（OpenCode 系；opencode 适配器已覆盖）；VS Code Copilot 聊天会话在 IDE 的 workspaceStorage（支持的 IDE 由 fork 机制覆盖）。
+- **相邻工具、非会话状态**：Backlog.md（项目任务 markdown）、编排器（Vibe Kanban、claude-squad、crystal/Nimbalyst、Conductor、claude-code-router——配置可嵌路径但无会话转录）。
+- **弱/不可验证的本地信号**：Junie（JetBrains；`~/.junie` 信任标记，会话子目录未证实）、Cody（v1.20 起聊天服务端同步；本地转录次要）、Refact.ai（自托管 Docker 卷）、灵码迁移前布局（已被 qoder-cn 取代，已覆盖）。

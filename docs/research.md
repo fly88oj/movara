@@ -182,6 +182,142 @@ local data. A Chinese version is available at `docs/research.zh-CN.md`.
 - zcode/zed desktop GUIs were not launched end-to-end (database-level
   verification against their real schemas instead).
 
+## 2026-09-22 market census additions (11 new agents)
+
+The full census (community/awesome lists, orchestrator support matrices
+like Vibe Kanban and claude-code-router, GitHub topics) produced ~30
+candidates beyond the 19 supported agents; the twelve below carry
+verifiable local session/history state and gained adapters. Storage
+facts were verified against each project's open-source repo and, for
+Qoder/Trae/Copilot/Kimi, against live on-disk state.
+
+### Goose (Block) — 54.5k★
+- `~/.local/share/goose/sessions/sessions.db` (SQLite, WAL, schema v9):
+  `sessions.working_dir` TEXT NOT NULL. Pre-db releases wrote flat
+  `sessions/*.jsonl` whose first line is session metadata carrying
+  `working_dir`.
+- Config `~/.config/goose/permissions/tool_permissions.json` keys
+  projects by absolute path.
+- Per-OS roots follow goose's etcetera strategy (macOS
+  `~/Library/Application Support/Block.block.goose` + Preferences
+  bundle dir; Windows `%APPDATA%\Block\goose`). No path-derived
+  bucket names (session ids are `YYYYMMDD_N`). `messages.content_json`
+  is chat content (--deep).
+
+### Cline / Roo Code / Kilo Code (VS Code extension family)
+- globalStorage per marketplace id (`saoudrizwan.claude-dev`,
+  `rooveterinaryinc.roo-cline`, `kilocode.kilo-code`) under every IDE
+  they run in (Code, Cursor, Windsurf, VSCodium, ~/.vscode-server).
+- Task history: Roo `tasks/_index.json` + `history_item.json`
+  (`workspace` field); Cline 4.x `state/taskHistory.json`
+  (`cwdOnTaskInitialization`, legacy `shadowGitConfigWorkTree`); Cline
+  ≤3.x and classic Kilo keep the array in the IDE's state.vscdb
+  ItemTable under the extension key (rewritten row-scoped).
+- Checkpoints are shadow git repos whose `.git/config core.worktree`
+  is the absolute workspace path — a stale value makes the extension
+  refuse to resume. Cline ≤3.x keys them `checkpoints/<cwdHash>/`
+  where cwdHash is a polynomial hash (×31, u32, UTF-16 code units,
+  decimal — handled as an exact-name rename, deliberately NOT a text
+  needle); Roo/Kilo key them per-task; classic Kilo also has legacy
+  `checkpoints/<sha256(cwd)[:8]>/` and `sessions/<sha256[:16]>/`.
+- Roo's `roo-index-cache-<sha256>.json` files are regenerable and are
+  removed on migration (derived-store invalidation). Roo Code was
+  archived 2026-05; its state is found abandoned on disk.
+
+### OpenHands
+- `~/.openhands`: `conversations/<uuid>/events/event-*.json` (ids are
+  UUIDs), `agent_settings.json` `working_dir`, and
+  `projects/<sha256(realpath(cwd))>/prompt_history.json`. Cloud
+  conversation store is a stub. Three env vars can relocate the root
+  (not tracked).
+
+### Codebuff / Freebuff
+- `~/.config/manicode/projects/<basename>/chats/<timestamp>/`
+  (the legacy config name survives the rebrand). The project key is
+  the bare basename — same-basename projects share storage upstream
+  (documented quirk); collisions at rename are refused loudly.
+  run-state.json sessionState embeds the cwd.
+
+### gptme
+- `~/.local/share/gptme/logs/<YYYY-MM-DD>-<name>/` — flat; names derive
+  from date + random/user/LLM naming, never the path. The project link
+  is `config.toml [chat] workspace`, saved TILDE-ABBREVIATED under
+  home (both forms rewritten; the spec machinery would cwd-join a
+  "~"-path, so the tilde form uses a dedicated boundary replacement).
+  `workspace` is a symlink to the project (retargeted, never
+  followed). Message `files` lists carry attachment paths.
+
+### Qoder / Tongyi Lingma (CN)
+- IDE is a VS Code fork (`~/.config/Qoder` state.vscdb + workspace
+  storage). Home root `~/.qoder`:
+  `memories/<account-hash>/projects/<dash-encoded-path>/**` — the
+  project level is the classic dash encoding; the 8-hex bucket above
+  it is account-keyed, not path-derived. Tongyi Lingma migrated its
+  CN variant to `~/.lingma/qoder-cn` with the same memories layout.
+  Lingma's own `index/` is a binary regenerable store (left alone).
+
+### Trae (ByteDance)
+- VS Code fork state under `~/.config/Trae CN` — the CN build's app
+  dir carries a literal space (international build: plain `Trae`) —
+  plus the thin `~/.trae` definition root (agents/skills/mcp.json).
+
+### GitHub Copilot CLI
+- `~/.copilot` agents/hooks/skills definitions. Observed GA installs
+  keep no session transcripts under this root; the definition layer is
+  the local surface.
+
+### Warp
+- `~/.local/share/warp/warp.db` (macOS `~/.warp`). Closed, undocumented
+  schema: the adapter discovers every table's TEXT columns at runtime
+  (PRAGMA table_info) and rewrites rows generically under the
+  boundary-aware patterns; journaled whole-file for undo. Verified
+  against a synthetic db only — no live sample was available.
+
+### Kimi Code (Moonshot) — verified live end to end
+- `~/.kimi-code`: buckets `wd_<basename(root)>_<sha256(root)[:12]>`
+  (34/34 live workspaces matched) naming a sessions/ directory and
+  file-history/ + workspace-trust/ FILES; workspaces.json (bucket
+  keys + roots + display name); session_index.jsonl
+  (sessionDir/workDir); per-session state.json (workDir + homedir) and
+  wire.jsonl (`runtime.set_binding.workspaceId` binds the session to
+  its workspace); the server event stream
+  (`event.workspace.updated` payload ids under generic keys).
+- **Derived stores hold pre-migration metadata and MUST be
+  invalidated**: `cache/query-store` (a sharded WAL+generations
+  materialized view the server answers session/workspace queries
+  from — it never re-reads the authoritative files until invalidated,
+  invisible to grep; found via strace), `sessions/.index-cache`,
+  `search-index`. All three are removed on migration and rebuild on
+  next launch. A stale store resurrected the old workspace in the
+  live web UI even with every authoritative layer clean — the
+  acceptance test is the agent's own view (`kimi session list` in the
+  new path + the API/UI), never disk greps alone.
+
+## Census exclusions (documented out of scope)
+
+- **Cloud-only / server-side sessions**: Google Jules (CLI drives
+  cloud sessions), Devin, Replit Agent, Lovable, Bolt.new, v0,
+  Firebase Studio, Roomote (Roo's post-shutdown cloud product),
+  Sweep (shut down 2026-04), MiniMax Agent (web), CodeGeeX web chat.
+- **Hybrid, local config only**: Amp (threads server-side at
+  ampcode.com/feed; local `~/.local/share/amp` holds config and a
+  thread mirror whose internals are undocumented and version-
+  unstable — nothing load-bearing to rekey).
+- **Covered by existing adapters**: MiniMax Code reuses
+  `~/.local/share/opencode` (OpenCode-derived; the opencode adapter
+  covers it), VS Code Copilot chat sessions live in the IDE's
+  workspaceStorage (covered by the fork machinery where the IDE is
+  supported).
+- **Adjacent tooling, not chat-session state**: Backlog.md (project
+  task markdown), orchestrators (Vibe Kanban, claude-squad, crystal/
+  Nimbalyst, Conductor, claude-code-router) whose configs may embed
+  paths but hold no session transcripts.
+- **Weak/unverifiable local signals**: Junie (JetBrains; `~/.junie`
+  trust markers, conversation subdir unconfirmed), Cody (server-side
+  chat sync since v1.20; local transcripts secondary), Refact.ai
+  (self-host Docker volumes), Tongyi Lingma's own pre-migration
+  layout (superseded by qoder-cn, covered).
+
 ## Primary sources
 
 - Claude Code: code.claude.com/docs/en/claude-directory;
