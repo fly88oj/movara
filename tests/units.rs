@@ -522,13 +522,19 @@ fn kimi_buckets_files_and_index_all_move() {
     assert!(cache.contains(&b_new) && !cache.contains(&b_old));
     assert_eq!(read(&root.join("search-index/CURRENT")), "ACME");
     // the server event stream: workspace registry + session identity
-    // (bucket ids under generic keys, roots and cwds) all moved.
+    // (bucket ids under generic keys, roots and cwds) all moved. The
+    // replayed display name follows the move as well.
     // JSON text carries Windows paths escaped, so compare forms
     // normalized: escaped pairs and single backslashes both -> /
     let norm = |s: &str| s.replace("\\\\", "/").replace('\\', "/");
     let global = norm(&read(&root.join("server/events/__global__.jsonl")));
     assert!(global.contains(&b_new) && !global.contains(&b_old));
     assert!(global.contains(&norm(&fx.new)) && !global.contains(&norm(&fx.old)));
+    assert!(
+        !global.contains(&format!("\"name\":\"{}\"", encodings::basename(&fx.old)))
+            && global.contains(&format!("\"name\":\"{}\"", encodings::basename(&fx.new))),
+        "event workspace name follows the move"
+    );
     let session_evt = norm(&read(&root.join("server/events/session_1.jsonl")));
     assert!(session_evt.contains(&b_new) && !session_evt.contains(&b_old));
     assert!(session_evt.contains(&norm(&fx.new)) && !session_evt.contains(&norm(&fx.old)));

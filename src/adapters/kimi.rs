@@ -93,7 +93,9 @@ impl Adapter for KimiCodeAdapter {
     }
 
     fn process_names(&self) -> &'static [&'static str] {
-        &["kimi"]
+        // the CLI process is "kimi-code", the state-holding bridge
+        // daemon "kimi-webbridge"; "kimi" covers the bare binary name
+        &["kimi", "kimi-code", "kimi-webbridge"]
     }
 
     fn scan(&self, ctx: &Ctx, spec: &ReplaceSpec) -> Vec<Finding> {
@@ -217,6 +219,56 @@ impl Adapter for KimiCodeAdapter {
                         &ws_path,
                         serde_json::to_string_pretty(&ws)?.as_bytes(),
                     )?;
+                }
+            }
+        }
+        // the server event stream replays event.workspace.updated with
+        // the same display name — it must follow the move too or a
+        // replaying server revives the old workspace NAME under the new
+        // id (observed on a live machine)
+        if old_base != new_base {
+            let evt_path = base.join("server/events/__global__.jsonl");
+            if evt_path.is_file() {
+                if let Ok(text) = std::fs::read_to_string(&evt_path) {
+                    let mut out = String::with_capacity(text.len());
+                    let mut changed = false;
+                    for line in text.split_inclusive('\n') {
+                        let mut handled = false;
+                        if let Ok(mut o) = serde_json::from_str::<serde_json::Value>(
+                            line.trim_end_matches(['\n', '\r']),
+                        ) {
+                            if let Some(ws) = o
+                                .get_mut("envelope")
+                                .and_then(|e| e.get_mut("payload"))
+                                .and_then(|p| p.get_mut("workspace"))
+                                .and_then(|w| w.as_object_mut())
+                            {
+                                if ws.get("name").and_then(|n| n.as_str())
+                                    == Some(old_base.as_str())
+                                {
+                                    ws.insert(
+                                        "name".to_string(),
+                                        serde_json::Value::String(new_base.clone()),
+                                    );
+                                    changed = true;
+                                    out.push_str(&serde_json::to_string(&o)?);
+                                    if let Some(rest) =
+                                        line.strip_prefix(line.trim_end_matches(['\n', '\r']))
+                                    {
+                                        out.push_str(rest);
+                                    }
+                                    handled = true;
+                                }
+                            }
+                        }
+                        if !handled {
+                            out.push_str(line);
+                        }
+                    }
+                    if changed {
+                        backup.record_file(&evt_path)?;
+                        rewriters::write_atomic(&evt_path, out.as_bytes())?;
+                    }
                 }
             }
         }

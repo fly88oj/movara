@@ -185,7 +185,11 @@ impl Fixture {
                     "timestamp": "2026-09-01T00:00:00.000Z",
                     "payload": {
                         "type": "event.workspace.updated",
-                        "workspace": {"id": bucket, "root": self.old, "name": "n"}
+                        "workspace": {
+                            "id": bucket,
+                            "root": self.old,
+                            "name": movara::encodings::basename(&self.old),
+                        }
                     }
                 }
             }),
