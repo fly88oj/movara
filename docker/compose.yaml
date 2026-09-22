@@ -19,3 +19,58 @@ services:
     build:
       context: ..
       dockerfile: docker/agents/goose.Dockerfile
+
+  gptme:
+    build:
+      context: ..
+      dockerfile: docker/agents/gptme.Dockerfile
+
+  codebuff:
+    build:
+      context: ..
+      dockerfile: docker/agents/codebuff.Dockerfile
+
+  openhands:
+    build:
+      context: ..
+      dockerfile: docker/agents/openhands.Dockerfile
+
+  copilot:
+    build:
+      context: ..
+      dockerfile: docker/agents/copilot.Dockerfile
+
+  openinterpreter:
+    build:
+      context: ..
+      dockerfile: docker/agents/oi.Dockerfile
+
+  warp:
+    build:
+      context: ..
+      dockerfile: docker/agents/warp.Dockerfile
+
+  cline:
+    build:
+      context: ..
+      dockerfile: docker/agents/cline.Dockerfile
+
+  roo:
+    build:
+      context: ..
+      dockerfile: docker/agents/roo.Dockerfile
+
+  kilo:
+    build:
+      context: ..
+      dockerfile: docker/agents/kilo.Dockerfile
+
+  qoder:
+    build:
+      context: ..
+      dockerfile: docker/agents/qoder.Dockerfile
+
+  trae:
+    build:
+      context: ..
+      dockerfile: docker/agents/trae.Dockerfile

@@ -23,6 +23,11 @@ pub struct Manifest {
     pub dbs: Vec<FileEntry>,
     #[serde(default)]
     pub renames: Vec<(String, String)>,
+    /// symlinks retargeted by the change: (link path, OLD target) —
+    /// undo recreates the link pointing at the old target (a self
+    /// rename entry cannot express that)
+    #[serde(default)]
+    pub symlinks: Vec<(String, String)>,
     #[serde(default)]
     pub moved_project: Option<(String, String)>,
     /// rebase rules an import applied (empty for plain migrations)
@@ -75,6 +80,7 @@ impl Backup {
                 files: Vec::new(),
                 dbs: Vec::new(),
                 renames: Vec::new(),
+                symlinks: Vec::new(),
                 moved_project: None,
                 rules: Vec::new(),
                 created_paths: Vec::new(),
@@ -146,6 +152,19 @@ impl Backup {
             crate::ctx::path_str(&absolute(old)),
             crate::ctx::path_str(&absolute(new)),
         ));
+    }
+
+    /// Journal a symlink retarget: undo recreates the link pointing at
+    /// the OLD target. (record_rename(old, old) is a no-op on undo —
+    /// the link itself never moved, its target did.)
+    pub fn record_symlink(&mut self, link: &Path, old_target: &Path) {
+        let l = crate::ctx::path_str(&absolute(link));
+        if self.manifest.symlinks.iter().any(|(p, _)| *p == l) {
+            return;
+        }
+        self.manifest
+            .symlinks
+            .push((l, old_target.to_string_lossy().into_owned()));
     }
 
     /// Journal a path this change creates (file, database or directory);
@@ -275,6 +294,36 @@ pub fn undo(backup_dir: &Path, backup_id: &str) -> Result<bool> {
             None => p.to_string(),
         }
     };
+
+    // 1b. restore retargeted symlinks to their OLD targets (reverse
+    //     order; recreate even if the link was removed, remove first
+    //     if it exists — a link never moves, its target did)
+    for (link, old_target) in manifest.symlinks.iter().rev() {
+        let link = PathBuf::from(link);
+        let old_target = PathBuf::from(old_target);
+        if let Some(parent) = link.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if link.exists() || std::fs::symlink_metadata(&link).is_ok() {
+            let _ = fs::remove_file(&link);
+        }
+        #[cfg(unix)]
+        let made = std::os::unix::fs::symlink(&old_target, &link).is_ok();
+        #[cfg(windows)]
+        let made = std::os::windows::fs::symlink_dir(&old_target, &link).is_ok();
+        if !made {
+            eprintln!(
+                "{}",
+                t!(
+                    "backup.err_reverse",
+                    new = link.display().to_string().as_str(),
+                    old = old_target.display().to_string().as_str(),
+                    error = "symlink".to_string().as_str()
+                )
+            );
+            ok = false;
+        }
+    }
 
     // 2. restore databases (whole-file copies; drop stale wal/shm)
     for entry in &manifest.dbs {
