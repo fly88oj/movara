@@ -19,6 +19,7 @@ fn s0_target_ctx(tag: &str) -> (movara::ctx::Ctx, std::path::PathBuf) {
     let ctx = movara::ctx::Ctx {
         config_home: tmp.join(".config"),
         data_home: tmp.join(".local").join("share"),
+        data_local: Some(tmp.join(".local").join("share")),
         home: tmp.clone(),
     };
     (ctx, tmp)

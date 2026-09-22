@@ -15,6 +15,12 @@ pub struct Ctx {
     pub home: PathBuf,
     pub config_home: PathBuf,
     pub data_home: PathBuf,
+    /// the Windows local (non-roaming) data root, when pinned; None
+    /// means "resolve lazily from the environment" (real-machine
+    /// semantics). Tests construct Ctx literally and MUST pin this —
+    /// otherwise parallel fixtures on Windows would collide inside the
+    /// REAL %LOCALAPPDATA%.
+    pub data_local: Option<PathBuf>,
 }
 
 /// which state-root family a path belongs to; archives carry this so a
@@ -62,7 +68,8 @@ impl Ctx {
             return Ctx {
                 home,
                 config_home: config,
-                data_home: data,
+                data_home: data.clone(),
+                data_local: Some(data),
             };
         }
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -72,6 +79,7 @@ impl Ctx {
             home,
             config_home,
             data_home,
+            data_local: None,
         }
     }
 
@@ -92,10 +100,14 @@ impl Ctx {
 
     /// path under the local (non-roaming) data root; on Linux identical
     /// to `d` — the distinction only exists on Windows
-    /// (`%LOCALAPPDATA%` vs `%APPDATA%`)
+    /// (`%LOCALAPPDATA%` vs `%APPDATA%`). A pinned `data_local` wins
+    /// (test isolation), then MOVARA_HOME, then the real machine root.
     pub fn dl(&self, rel: &str) -> PathBuf {
         #[cfg(windows)]
         {
+            if let Some(root) = &self.data_local {
+                return root.join(rel);
+            }
             if let Ok(h) = env::var("MOVARA_HOME") {
                 return PathBuf::from(h).join(".local").join("share").join(rel);
             }

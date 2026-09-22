@@ -35,6 +35,7 @@ impl Fixture {
             home: home.clone(),
             config_home: home.join(".config"),
             data_home: home.join(".local").join("share"),
+            data_local: Some(home.join(".local").join("share")),
         };
         let f = Fixture {
             old: old_dir.to_string_lossy().into_owned(),
@@ -354,7 +355,9 @@ impl Fixture {
     /// legacy flat jsonl whose first line is session metadata, plus a
     /// config-dir permissions file
     fn build_goose(&self) {
-        let db = self.ctx.d("goose/sessions/sessions.db");
+        let db = self
+            .ctx
+            .d(&format!("{}/sessions/sessions.db", goose_data_rel()));
         fs::create_dir_all(db.parent().unwrap()).unwrap();
         let con = rusqlite::Connection::open(&db).unwrap();
         con.execute_batch(
@@ -379,7 +382,10 @@ impl Fixture {
         .unwrap();
         drop(con);
         self.w(
-            ".local/share/goose/sessions/20260901_000000.jsonl",
+            &format!(
+                ".local/share/{}/sessions/20260901_000000.jsonl",
+                goose_data_rel()
+            ),
             &format!(
                 "{}\n{}\n",
                 serde_json::json!({"id": "legacy1", "working_dir": self.old}),
@@ -1063,4 +1069,17 @@ pub fn boundary_contains(raw: &[u8], needle: &str) -> bool {
         from = i + 1;
     }
     false
+}
+
+/// goose's data dir relative to the XDG data root — the adapter mirrors
+/// goose's etcetera strategy (bundle-id dir on macOS)
+pub fn goose_data_rel() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        "Block.block.goose"
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        "goose"
+    }
 }

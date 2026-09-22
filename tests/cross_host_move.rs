@@ -24,6 +24,7 @@ fn target_ctx(tag: &str) -> (Ctx, PathBuf) {
         home: tmp.clone(),
         config_home: tmp.join(".config"),
         data_home: tmp.join(".local").join("share"),
+        data_local: Some(tmp.join(".local").join("share")),
     };
     (ctx, tmp)
 }

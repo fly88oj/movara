@@ -24,6 +24,7 @@ fn target_home(tag: &str, proj_rel: &str) -> (movara::ctx::Ctx, PathBuf) {
         home: home.clone(),
         config_home: home.join(".config"),
         data_home: home.join(".local").join("share"),
+        data_local: Some(home.join(".local").join("share")),
     };
     let proj = ctx
         .home

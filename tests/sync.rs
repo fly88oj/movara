@@ -19,6 +19,7 @@ fn ctx(tag: &str) -> (movara::ctx::Ctx, std::path::PathBuf) {
         home: tmp.clone(),
         config_home: tmp.join(".config"),
         data_home: tmp.join(".local").join("share"),
+        data_local: Some(tmp.join(".local").join("share")),
     };
     (c, tmp)
 }
