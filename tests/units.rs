@@ -610,8 +610,12 @@ fn goose_working_dir_legacy_metadata_and_permissions_move() {
     .to_string();
     let meta: serde_json::Value = serde_json::from_str(&first).unwrap();
     assert_eq!(meta["working_dir"], json!(fx.new));
-    let perms: serde_json::Value =
-        serde_json::from_str(&read(&fx.ctx.c("goose/permissions/tool_permissions.json"))).unwrap();
+    let perms: serde_json::Value = serde_json::from_str(&read(
+        &fx.ctx
+            .h(&common::goose_config_rel())
+            .join("permissions/tool_permissions.json"),
+    ))
+    .unwrap();
     assert!(
         perms["per_project"]
             .as_object()
@@ -865,7 +869,7 @@ fn copilot_definitions_move() {
 fn warp_generic_text_column_sweep_moves_paths() {
     let fx = Fixture::new("units-warp");
     fx.migrate(false);
-    let con = rusqlite::Connection::open(fx.ctx.dl("warp/warp.db")).unwrap();
+    let con = rusqlite::Connection::open(common::warp_db(&fx.ctx)).unwrap();
     let cwd: String = con
         .query_row("SELECT cwd FROM launches", [], |r| r.get(0))
         .unwrap();

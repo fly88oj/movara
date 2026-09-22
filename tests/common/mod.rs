@@ -144,7 +144,7 @@ impl Fixture {
     /// Warp: synthetic warp-shaped db — closed real schema, the adapter
     /// sweeps PRAGMA-discovered text columns generically
     fn build_warp(&self) {
-        let db = self.ctx.dl("warp/warp.db");
+        let db = warp_db(&self.ctx);
         fs::create_dir_all(db.parent().unwrap()).unwrap();
         let con = rusqlite::Connection::open(&db).unwrap();
         con.execute_batch(
@@ -436,7 +436,10 @@ impl Fixture {
             ),
         );
         self.wj(
-            ".config/goose/permissions/tool_permissions.json",
+            &format!(
+                "{}/permissions/tool_permissions.json",
+                goose_config_rel()
+            ),
             serde_json::json!({"version": 1, "per_project": {self.old.clone(): {"developer-tools": true}}}),
         );
     }
@@ -1124,5 +1127,35 @@ pub fn goose_data_rel() -> &'static str {
     #[cfg(not(target_os = "macos"))]
     {
         "goose"
+    }
+}
+
+/// goose's config dir relative to the fixture home (HOME-relative,
+/// because the macOS Preferences dir is not under the config root)
+pub fn goose_config_rel() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        "Library/Preferences/Block.block.goose".to_string()
+    }
+    #[cfg(windows)]
+    {
+        ".config/Block/goose".to_string()
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        ".config/goose".to_string()
+    }
+}
+
+/// warp's database path — macOS keeps it under ~/.warp (home root),
+/// elsewhere it is the local-data root
+pub fn warp_db(ctx: &Ctx) -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        ctx.home.join(".warp/warp.db")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        ctx.dl("warp/warp.db")
     }
 }
