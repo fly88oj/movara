@@ -213,7 +213,7 @@ impl Adapter for KimiCodeAdapter {
                         }
                     }
                 }
-                if changed {
+                if changed && !backup.dry_run {
                     backup.record_file(&ws_path)?;
                     rewriters::write_atomic(
                         &ws_path,
@@ -265,7 +265,7 @@ impl Adapter for KimiCodeAdapter {
                             out.push_str(line);
                         }
                     }
-                    if changed {
+                    if changed && !backup.dry_run {
                         backup.record_file(&evt_path)?;
                         rewriters::write_atomic(&evt_path, out.as_bytes())?;
                     }

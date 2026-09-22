@@ -183,8 +183,10 @@ impl Adapter for GptmeAdapter {
                 }
                 if let Ok(raw) = std::fs::read_to_string(&cfg) {
                     if let Some(new_text) = boundary_replace(&raw, &t_old, &t_new) {
-                        backup.record_file(&cfg)?;
-                        crate::rewriters::write_atomic(&cfg, new_text.as_bytes())?;
+                        if !backup.dry_run {
+                            backup.record_file(&cfg)?;
+                            crate::rewriters::write_atomic(&cfg, new_text.as_bytes())?;
+                        }
                         actions.push(mk(self.name(), "file", &cfg, "workspace (tilde)"));
                     }
                 }
