@@ -617,3 +617,91 @@ fn goose_working_dir_legacy_metadata_and_permissions_move() {
         .unwrap()
         .contains_key(&fx.old));
 }
+
+#[test]
+fn cline_family_buckets_shadow_gits_and_task_history_move() {
+    let fx = Fixture::new("units-cline");
+    fx.migrate(false);
+    let mut h: u32 = 0;
+    for u in fx.old.encode_utf16() {
+        h = h.wrapping_mul(31).wrapping_add(u32::from(u));
+    }
+    let old_hash = h.to_string();
+    let mut h2: u32 = 0;
+    for u in fx.new.encode_utf16() {
+        h2 = h2.wrapping_mul(31).wrapping_add(u32::from(u));
+    }
+    let new_hash = h2.to_string();
+    let gs = "Code/User/globalStorage/saoudrizwan.claude-dev";
+    let base = fx.ctx.c(gs);
+    // Cline checkpoints bucket renamed (decimal cwdHash) and its shadow
+    // git's core.worktree follows
+    if !base.join(format!("checkpoints/{new_hash}")).is_dir() {
+        let listing = std::fs::read_dir(base.join("checkpoints"))
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        panic!(
+            "checkpoints/{new_hash} missing; old={old_hash} listing={listing:?} base={:?}",
+            base.display()
+        );
+    }
+    assert!(!base.join(format!("checkpoints/{old_hash}")).exists());
+    let cfg = read(&base.join(format!("checkpoints/{new_hash}/.git/config")));
+    assert!(cfg.contains(&fx.new) && !cfg.contains(&fx.old));
+    // task tool paths (identity key "path") + file-based task history
+    let hist: serde_json::Value =
+        serde_json::from_str(&read(&base.join("state/taskHistory.json"))).unwrap();
+    assert_eq!(hist[0]["cwdOnTaskInitialization"], json!(fx.new));
+    assert_eq!(hist[0]["shadowGitConfigWorkTree"], json!(fx.new));
+    let conv: serde_json::Value = serde_json::from_str(&read(
+        &base.join("tasks/1770000000000/api_conversation_history.json"),
+    ))
+    .unwrap();
+    assert_eq!(
+        conv[1]["tool_use"]["input"]["path"],
+        json!(format!("{}/main.rs", fx.new))
+    );
+    // Roo: index workspace fields + per-task shadow git core.worktree;
+    // the stale index cache is removed
+    let roo = fx
+        .ctx
+        .c("Code/User/globalStorage/rooveterinaryinc.roo-cline");
+    let idx: serde_json::Value =
+        serde_json::from_str(&read(&roo.join("tasks/_index.json"))).unwrap();
+    assert_eq!(idx["entries"][0]["workspace"], json!(fx.new));
+    let roo_cfg = read(&roo.join("tasks/1770000000001/checkpoints/.git/config"));
+    assert!(roo_cfg.contains(&fx.new) && !roo_cfg.contains(&fx.old));
+    let old_cache = format!(
+        "roo-index-cache-{}.json",
+        movara::encodings::sha256_hex(&fx.old)
+    );
+    assert!(!roo.join(&old_cache).exists(), "index cache invalidated");
+    // Kilo classic: sha256[:16] session bucket renamed
+    let kilo = fx.ctx.c("Code/User/globalStorage/kilocode.kilo-code");
+    let k16_new = &movara::encodings::sha256_hex(&fx.new)[..16];
+    assert!(kilo.join(format!("sessions/{k16_new}")).is_dir());
+    // IDE state.vscdb: the Cline key's task history moved; the
+    // unrelated extension's row is untouched
+    let db = fx.ctx.c("Code/User/globalStorage/state.vscdb");
+    let con = rusqlite::Connection::open(&db).unwrap();
+    let v: String = con
+        .query_row(
+            "SELECT value FROM ItemTable WHERE key = 'saoudrizwan.claude-dev'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(v.contains(&fx.new) && !v.contains(&fx.old));
+    let other: String = con
+        .query_row(
+            "SELECT value FROM ItemTable WHERE key = 'some.other.ext'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(other, "{\"note\": \"not ours\"}");
+}

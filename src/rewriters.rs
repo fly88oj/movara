@@ -34,6 +34,8 @@ const JSON_FIELD_KEYS: &[&str] = &[
     "sessionDir",
     "workspaceId",
     "working_dir",
+    "cwdOnTaskInitialization",
+    "shadowGitConfigWorkTree",
     "data_dir",
     "workDir",
     "work_dir",

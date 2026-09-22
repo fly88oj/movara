@@ -182,6 +182,7 @@ Un `move` inter-hôtes ajoute l'arborescence du projet (avec `.git`) à l'échan
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | MRU de répertoires + hachage du nom de fichier |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | buckets `wd_<basename>_<sha256[:12]>` (dirs+fichiers) + workDir |
 | Goose (Block) | `~/.local/share/goose/sessions/sessions.db` + `*.jsonl` hérités, `~/.config/goose/` | `sessions.working_dir` + métadonnées `working_dir` + clés de permissions |
+| Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | champs `path` des tâches + `workspace`/`cwdOnTaskInitialization` + `core.worktree` des checkpoints + buckets cwdHash/sha256 |
 
 Non pris en charge (volontairement) :
 

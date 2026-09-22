@@ -4,6 +4,7 @@
 //!
 //! All SQL in adapters is inline literals executed with bound parameters.
 
+pub mod cline;
 pub mod codex;
 pub mod gemini_family;
 pub mod goose;
@@ -688,6 +689,7 @@ pub fn all() -> Vec<Box<dyn Adapter>> {
         Box::new(zed::ZedAdapter),
         Box::new(kimi::KimiCodeAdapter),
         Box::new(goose::GooseAdapter),
+        Box::new(cline::ClineFamilyAdapter),
     ]
 }
 

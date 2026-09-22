@@ -87,6 +87,98 @@ impl Fixture {
         self.build_aider();
         self.build_kimi();
         self.build_goose();
+        self.build_cline();
+    }
+
+    /// Cline family: one globalStorage per marketplace id under the
+    /// IDE's User dir, with task files, hash-named checkpoint buckets
+    /// holding shadow gits (core.worktree), the Roo task index, and
+    /// task history in the IDE's state.vscdb ItemTable
+    fn build_cline(&self) {
+        // the w() helper is HOME-relative; the IDE globalStorage lives
+        // under the config root
+        let gs = ".config/Code/User/globalStorage/saoudrizwan.claude-dev";
+        // Cline <=3.x checkpoints bucket: polynomial hash of the cwd
+        let mut h: u32 = 0;
+        for u in self.old.encode_utf16() {
+            h = h.wrapping_mul(31).wrapping_add(u32::from(u));
+        }
+        let cwd_hash = h.to_string();
+        let ck = format!("{gs}/checkpoints/{cwd_hash}");
+        self.w(
+            &format!("{ck}/.git/config"),
+            &format!(
+                "[core]\n\tworktree = {}\n\trepositoryformatversion = 0\n",
+                self.old
+            ),
+        );
+        // task files (tool paths under the identity key "path")
+        self.wj(
+            &format!("{gs}/tasks/1770000000000/api_conversation_history.json"),
+            serde_json::json!([
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "tool_use": {"name": "write", "input": {"path": format!("{}/main.rs", self.old), "content": "x"}}}
+            ]),
+        );
+        // Cline 4.x file-based task history
+        self.wj(
+            &format!("{gs}/state/taskHistory.json"),
+            serde_json::json!([
+                {"id": "1770000000000", "task": "t", "cwdOnTaskInitialization": self.old,
+                 "shadowGitConfigWorkTree": self.old}
+            ]),
+        );
+        // Roo: task index + per-task shadow git + a stale index cache
+        let roo = ".config/Code/User/globalStorage/rooveterinaryinc.roo-cline";
+        self.wj(
+            &format!("{roo}/tasks/_index.json"),
+            serde_json::json!({"version": 1, "entries": [{"ts": "1770000000001", "workspace": self.old}]}),
+        );
+        self.wj(
+            &format!("{roo}/tasks/1770000000001/history_item.json"),
+            serde_json::json!({"ts": "1770000000001", "workspace": self.old}),
+        );
+        self.w(
+            &format!("{roo}/tasks/1770000000001/checkpoints/.git/config"),
+            &format!("[core]\n\tworktree = {}\n", self.old),
+        );
+        let roo_cache = movara::encodings::sha256_hex(&self.old);
+        self.w(
+            &format!("{roo}/roo-index-cache-{roo_cache}.json"),
+            "{\"stale\":true}",
+        );
+        // Kilo classic: sha256[:16] session bucket
+        let kilo = ".config/Code/User/globalStorage/kilocode.kilo-code";
+        let k16 = &movara::encodings::sha256_hex(&self.old)[..16];
+        self.wj(
+            &format!("{kilo}/sessions/{k16}/session.json"),
+            serde_json::json!({"workspace": self.old, "turns": 3}),
+        );
+        // IDE state.vscdb ItemTable with the Cline task history array
+        let db = self.ctx.c("Code/User/globalStorage/state.vscdb");
+        fs::create_dir_all(db.parent().unwrap()).unwrap();
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT);")
+            .unwrap();
+        con.execute(
+            "INSERT INTO ItemTable VALUES (?,?)",
+            rusqlite::params![
+                "saoudrizwan.claude-dev",
+                serde_json::json!([
+                    {"id": "1770000000002", "cwdOnTaskInitialization": self.old,
+                     "shadowGitConfigWorkTree": self.old}
+                ])
+                .to_string()
+            ],
+        )
+        .unwrap();
+        // an unrelated extension's row in the same db must stay alone
+        con.execute(
+            "INSERT INTO ItemTable VALUES (?,?)",
+            rusqlite::params!["some.other.ext", "{\"note\": \"not ours\"}"],
+        )
+        .unwrap();
+        drop(con);
     }
 
     /// Goose: data/sessions/sessions.db (sessions.working_dir) + a

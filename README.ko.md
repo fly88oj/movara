@@ -180,6 +180,7 @@ movara undo --id 20260903-131427-644777
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | 디렉터리 MRU + 파일명 해시 |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` 버킷 디렉터리+파일 + workDir |
 | Goose (Block) | `~/.local/share/goose/sessions/sessions.db` + 레거시 `*.jsonl`, `~/.config/goose/` | `sessions.working_dir` + `working_dir` 메타데이터 + 권한 키 |
+| Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | 태스크 `path` 필드 + `workspace`/`cwdOnTaskInitialization` + 체크포인트 `core.worktree` + cwdHash/sha256 버킷 |
 
 지원하지 않음(의도된 결정):
 

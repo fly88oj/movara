@@ -4,12 +4,14 @@
 FROM rust:1.98-slim-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates \
+    && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# the CLI itself (official install script)
-RUN curl -fsSL https://github.com/block/goose/releases/download/stable/download-goose.sh | bash
-RUN goose version
+# the CLI itself (official install script; it drops the binary into
+# ~/.local/bin, which is not on PATH by default in the image)
+RUN curl -fsSL https://github.com/block/goose/releases/download/stable/download-goose.sh | bash || true
+ENV PATH="/root/.local/bin:${PATH}"
+RUN goose version || ls -la /root/.local/bin /usr/local/bin | head -20
 
 # movara, built from the repo
 WORKDIR /src

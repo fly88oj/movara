@@ -183,6 +183,7 @@ Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den A
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | Verzeichnis-MRU + Dateinamen-Hash |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` Buckets (Verz.+Dateien) + workDir |
 | Goose (Block) | `~/.local/share/goose/sessions/sessions.db` + Legacy-`*.jsonl`, `~/.config/goose/` | `sessions.working_dir` + `working_dir`-Metadaten + Berechtigungsschlüssel |
+| Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | Task-`path`-Felder + `workspace`/`cwdOnTaskInitialization` + Checkpoint-`core.worktree` + cwdHash/sha256-Buckets |
 
 Nicht unterstützt (bewusst so entschieden):
 
