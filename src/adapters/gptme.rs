@@ -155,8 +155,11 @@ impl Adapter for GptmeAdapter {
         // so this is a direct boundary-aware string replacement
         let home = ctx.home.to_string_lossy().into_owned();
         if spec.old.starts_with(&home) && spec.new.starts_with(&home) {
-            let t_old = format!("~{}", &spec.old[home.len()..]);
-            let t_new = format!("~{}", &spec.new[home.len()..]);
+            // gptme writes the tilde suffix with forward slashes on
+            // every OS; the path under comparison may carry backslashes
+            let suffix = |p: &str| p[home.len()..].replace('\\', "/");
+            let t_old = format!("~{}", suffix(&spec.old));
+            let t_new = format!("~{}", suffix(&spec.new));
             for conv in self.conv_dirs(ctx) {
                 let cfg = conv.join("config.toml");
                 if !cfg.is_file() {

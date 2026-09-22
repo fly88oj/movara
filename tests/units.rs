@@ -95,6 +95,12 @@ fn json_val(line: &str) -> serde_json::Value {
     serde_json::from_str(line).unwrap()
 }
 
+/// JSON text on Windows carries escaped backslashes; compare forms
+/// normalized (escaped pairs and single backslashes both -> /)
+fn norm_forms(s: &str) -> String {
+    s.replace("\\\\", "/").replace('\\', "/")
+}
+
 #[test]
 fn claude_bucket_rename_and_json_keys() {
     let fx = Fixture::new("claude");
@@ -706,7 +712,10 @@ fn cline_family_buckets_shadow_gits_and_task_history_move() {
             |r| r.get(0),
         )
         .unwrap();
-    assert!(v.contains(&fx.new) && !v.contains(&fx.old));
+    assert!(
+        norm_forms(&v).contains(&norm_forms(&fx.new))
+            && !norm_forms(&v).contains(&norm_forms(&fx.old))
+    );
     let other: String = con
         .query_row(
             "SELECT value FROM ItemTable WHERE key = 'some.other.ext'",
@@ -831,9 +840,14 @@ fn qoder_memories_buckets_ide_state_and_lingma_move() {
             |r| r.get(0),
         )
         .unwrap();
-    assert!(v.contains(&fx.new) && !v.contains(&fx.old));
-    let ws = read(&fx.ctx.c("Qoder/User/workspaceStorage/ws1/workspace.json"));
-    assert!(ws.contains(&fx.new) && ws.contains("file://"));
+    assert!(
+        norm_forms(&v).contains(&norm_forms(&fx.new))
+            && !norm_forms(&v).contains(&norm_forms(&fx.old))
+    );
+    let ws = norm_forms(&read(
+        &fx.ctx.c("Qoder/User/workspaceStorage/ws1/workspace.json"),
+    ));
+    assert!(ws.contains(&norm_forms(&fx.new)) && ws.contains("file://"));
 }
 
 #[test]
@@ -849,9 +863,14 @@ fn trae_ide_state_and_definitions_move() {
             |r| r.get(0),
         )
         .unwrap();
-    assert!(v.contains(&fx.new) && !v.contains(&fx.old));
-    let ws = read(&fx.ctx.c("Trae CN/User/workspaceStorage/ws2/workspace.json"));
-    assert!(ws.contains(&fx.new) && !ws.contains(&fx.old));
+    assert!(
+        norm_forms(&v).contains(&norm_forms(&fx.new))
+            && !norm_forms(&v).contains(&norm_forms(&fx.old))
+    );
+    let ws = norm_forms(&read(
+        &fx.ctx.c("Trae CN/User/workspaceStorage/ws2/workspace.json"),
+    ));
+    assert!(ws.contains(&norm_forms(&fx.new)) && !ws.contains(&norm_forms(&fx.old)));
     let mcp: serde_json::Value = serde_json::from_str(&read(&fx.ctx.h(".trae/mcp.json"))).unwrap();
     assert_eq!(mcp["mcpServers"]["y"]["cwd"], json!(fx.new));
 }
