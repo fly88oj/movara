@@ -272,6 +272,21 @@ impl Adapter for KimiCodeAdapter {
                 }
             }
         }
+        // derived stores hold PRE-migration metadata: the server serves
+        // session/workspace queries from cache/query-store and, until
+        // invalidated, never re-reads the authoritative files (observed
+        // live — a clean session_index/events/state still listed the
+        // session under the old workspace). All three are caches by the
+        // agent's own design and rebuild on next launch: remove them.
+        for derived in [
+            base.join("cache/query-store"),
+            base.join("sessions/.index-cache"),
+            base.join("search-index"),
+        ] {
+            if derived.exists() {
+                let _ = std::fs::remove_dir_all(&derived);
+            }
+        }
         Ok(actions)
     }
 }

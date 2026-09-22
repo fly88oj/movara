@@ -512,15 +512,28 @@ fn kimi_buckets_files_and_index_all_move() {
     ))))
     .unwrap();
     assert_eq!(task["cwd"], json!(fx.new));
+    // the wire stream's runtime binding carries the workspace id —
+    // the server replays it to associate the session with its
+    // workspace, so a stale id revives the old workspace in the UI
+    let wire = read(&root.join(format!("sessions/{b_new}/session_1/agents/main/wire.jsonl")));
+    assert!(
+        wire.contains(&format!("\"workspaceId\":\"{b_new}\"")),
+        "runtime.set_binding must follow the move"
+    );
     // trust root follows the move
     let trust: serde_json::Value =
         serde_json::from_str(&read(&root.join(format!("workspace-trust/{b_new}")))).unwrap();
     assert_eq!(trust["root"], json!(fx.new));
-    // the index cache's bare bucket id moved too (non-identity field,
-    // text-rewritten), and the LMDB marker is untouched
-    let cache = read(&root.join("sessions/.index-cache/scan.json"));
-    assert!(cache.contains(&b_new) && !cache.contains(&b_old));
-    assert_eq!(read(&root.join("search-index/CURRENT")), "ACME");
+    // the index cache is removed with the other derived stores (its
+    // bare bucket ids were text-rewritten in earlier iterations, but a
+    // cache that survives can still serve stale shapes — invalidate)
+    assert!(!root.join("sessions/.index-cache/scan.json").exists());
+    // derived stores are REMOVED (regenerable): the server serves
+    // session queries from cache/query-store and never re-reads the
+    // authoritative files until it is invalidated — a stale store
+    // revived the old workspace in the live UI
+    assert!(!root.join("search-index/CURRENT").exists());
+    assert!(!root.join("cache/query-store/shard-00/db.wal").exists());
     // the server event stream: workspace registry + session identity
     // (bucket ids under generic keys, roots and cwds) all moved. The
     // replayed display name follows the move as well.

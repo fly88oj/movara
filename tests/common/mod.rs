@@ -140,9 +140,15 @@ impl Fixture {
         self.w(
             &format!("{agents_main}/wire.jsonl"),
             &format!(
-                "{}\n{}\n",
+                "{}\n{}\n{}\n",
                 serde_json::json!({"type": "metadata", "protocol_version": "1.4"}),
-                serde_json::json!({"type": "session.start", "workDir": self.old})
+                serde_json::json!({"type": "session.start", "workDir": self.old}),
+                // the server replays the wire stream and binds the
+                // session to its workspace through this record
+                serde_json::json!({
+                    "type": "runtime.set_binding",
+                    "workspaceId": bucket,
+                })
             ),
         );
         self.wj(
@@ -215,8 +221,14 @@ impl Fixture {
                 }
             }),
         );
-        // LMDB-style binary cache marker: must never be touched
+        // derived stores (the server's query store, the scan cache, the
+        // search index) hold pre-migration metadata and are REMOVED by
+        // the adapter — they rebuild on next launch
         self.w(&format!("{root}/search-index/CURRENT"), "ACME");
+        self.w(
+            &format!("{root}/cache/query-store/shard-00/db.wal"),
+            "STALE",
+        );
     }
 
     fn build_claude(&self) {
