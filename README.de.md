@@ -203,7 +203,7 @@ Nicht unterstützt (bewusst so entschieden):
 
 ```bash
 git clone https://github.com/fly88oj/movara && cd movara
-cargo test --all                          # alle 32 Tests müssen bestehen
+cargo test --all                          # die gesamte Suite muss bestehen
 cargo clippy --all-targets -- -D warnings # keine Warnungen
 cargo fmt --all -- --check
 pre-commit install                        # lokale Hooks (wie in der CI)

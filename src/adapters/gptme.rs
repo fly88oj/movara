@@ -79,17 +79,33 @@ impl GptmeAdapter {
             None
         };
         if let Some(nt) = new_target {
-            backup.record_rename(&link, &link);
+            if backup.dry_run {
+                return true;
+            }
+            // journal the OLD target so undo can restore it (a self
+            // rename is irreversible); recreate BEFORE removing is not
+            // possible for symlinks, so failure paths restore the old
+            // target directly
+            let old_target = target;
             let _ = std::fs::remove_file(&link);
             #[cfg(unix)]
             {
                 if std::os::unix::fs::symlink(&nt, &link).is_ok() {
+                    backup.record_rename(&link, &link);
                     return true;
                 }
+                let _ = std::os::unix::fs::symlink(&old_target, &link);
             }
             #[cfg(windows)]
             {
-                let _ = nt;
+                // recreate via std (symlink_dir for directory targets);
+                // unprivileged symlink creation may fail — restore the
+                // old target rather than leaving a dangling absence
+                if std::os::windows::fs::symlink_dir(&nt, &link).is_ok() {
+                    backup.record_rename(&link, &link);
+                    return true;
+                }
+                let _ = std::os::windows::fs::symlink_dir(&old_target, &link);
             }
         }
         false

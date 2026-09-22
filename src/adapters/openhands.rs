@@ -82,7 +82,7 @@ impl Adapter for OpenHandsAdapter {
         let new_h = crate::encodings::sha256_hex(&spec.new);
         let old_d = projects.join(&old_h);
         let new_d = projects.join(&new_h);
-        if old_d.is_dir() && !new_d.exists() {
+        if old_d.is_dir() && !new_d.exists() && !backup.dry_run {
             backup.record_rename(&old_d, &new_d);
             if std::fs::rename(&old_d, &new_d).is_ok() {
                 actions.push(mk(

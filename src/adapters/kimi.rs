@@ -277,14 +277,18 @@ impl Adapter for KimiCodeAdapter {
         // invalidated, never re-reads the authoritative files (observed
         // live — a clean session_index/events/state still listed the
         // session under the old workspace). All three are caches by the
-        // agent's own design and rebuild on next launch: remove them.
-        for derived in [
-            base.join("cache/query-store"),
-            base.join("sessions/.index-cache"),
-            base.join("search-index"),
-        ] {
-            if derived.exists() {
-                let _ = std::fs::remove_dir_all(&derived);
+        // agent's own design and rebuild on next launch: remove them
+        // (never during a dry run). Literal subpaths of the kimi base;
+        // remove_dir_all does not follow symlinks.
+        if !backup.dry_run {
+            for derived in [
+                base.join("cache/query-store"),
+                base.join("sessions/.index-cache"),
+                base.join("search-index"),
+            ] {
+                if derived.exists() {
+                    let _ = std::fs::remove_dir_all(&derived);
+                }
             }
         }
         Ok(actions)

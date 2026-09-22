@@ -203,7 +203,7 @@ claude-code-router（无路径键控状态）。
 
 ```bash
 git clone https://github.com/fly88oj/movara && cd movara
-cargo test --all                          # 32 个测试必须全过
+cargo test --all                          # 全量测试必须全过
 cargo clippy --all-targets -- -D warnings # 零警告
 cargo fmt --all -- --check
 pre-commit install                        # 本地钩子（与 CI 一致）

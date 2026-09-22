@@ -49,9 +49,12 @@ impl Adapter for TraeAdapter {
     }
 
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
+        // NO existence filtering: root_kinds is a fixed zip-aligned
+        // list, and filtering here would shift the pairing (the
+        // archive layer skips missing paths on its own)
         let mut v: Vec<PathBuf> = self.bases().iter().map(|b| b.ide_db(ctx)).collect();
         v.push(self.home_root(ctx));
-        v.into_iter().filter(|p| p.exists()).collect()
+        v
     }
 
     fn root_kinds(&self) -> Vec<crate::ctx::RootKind> {

@@ -227,7 +227,7 @@ Sin soporte (por decisión de diseño):
 
 ```bash
 git clone https://github.com/fly88oj/movara && cd movara
-cargo test --all                          # 32 pruebas deben pasar
+cargo test --all                          # toda la suite debe pasar
 cargo clippy --all-targets -- -D warnings # cero advertencias
 cargo fmt --all -- --check
 pre-commit install                        # ganchos locales (idénticos a CI)

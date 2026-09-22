@@ -200,7 +200,7 @@ movara undo --id 20260903-131427-644777
 
 ```bash
 git clone https://github.com/fly88oj/movara && cd movara
-cargo test --all                          # 32개 테스트 통과 필수
+cargo test --all                          # 전체 테스트 스위트 통과 필수
 cargo clippy --all-targets -- -D warnings # 경고가 없어야 함
 cargo fmt --all -- --check
 pre-commit install                        # 로컬 훅 (CI와 동일)

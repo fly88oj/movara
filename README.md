@@ -225,7 +225,7 @@ Not supported (by design):
 
 ```bash
 git clone https://github.com/fly88oj/movara && cd movara
-cargo test --all                          # 32 tests must pass
+cargo test --all                          # the full suite must pass
 cargo clippy --all-targets -- -D warnings # no warnings
 cargo fmt --all -- --check
 pre-commit install                        # local hooks (same as CI)

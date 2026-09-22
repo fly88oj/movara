@@ -691,31 +691,55 @@ pub fn sqlite_text_columns(con: &rusqlite::Connection) -> Vec<(String, String)> 
 /// schema-agnostic rewrite: every PRAGMA-discovered text column whose
 /// value references the spec gets a row-by-row, bound-parameter update
 /// (rowid-addressed). Callers journal the db with record_db first.
+/// Identifiers are escaped for double-quoting (" -> ""); matching
+/// pages loop until drained so large tables migrate fully.
 pub fn sqlite_text_sweep(con: &rusqlite::Connection, spec: &ReplaceSpec) -> Result<usize> {
     let mut total = 0usize;
     for (t, c) in sqlite_text_columns(con) {
-        let tq = t.replace('\'', "''");
+        let tq = t.replace('"', "\"\"");
         let cq = c.replace('"', "\"\"");
-        let select =
-            format!("SELECT rowid, \"{cq}\" FROM \"{tq}\" WHERE \"{cq}\" LIKE ? LIMIT 500");
         for pat in spec.like_patterns() {
-            let rows: Vec<(i64, String)> = {
-                let mut stmt = con.prepare(&select)?;
-                let it =
-                    stmt.query_map([pat], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?;
-                it.filter_map(|x| x.ok()).collect()
-            };
-            for (rowid, value) in rows {
-                let new_value = spec.replace(&value);
-                if new_value != value {
-                    let update = format!("UPDATE \"{tq}\" SET \"{cq}\" = ? WHERE rowid = ?");
-                    con.execute(&update, rusqlite::params![new_value, rowid])?;
-                    total += 1;
+            loop {
+                let rows: Vec<(i64, String)> = {
+                    let select = format!(
+                        "SELECT rowid, \"{cq}\" FROM \"{tq}\" WHERE \"{cq}\" LIKE ? LIMIT 500"
+                    );
+                    let mut stmt = con.prepare(&select)?;
+                    let it = stmt.query_map([&pat], |r| {
+                        Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                    })?;
+                    it.filter_map(|x| x.ok()).collect()
+                };
+                if rows.is_empty() {
+                    break;
+                }
+                for (rowid, value) in rows {
+                    let new_value = spec.replace(&value);
+                    if new_value != value {
+                        let update = format!("UPDATE \"{tq}\" SET \"{cq}\" = ? WHERE rowid = ?");
+                        con.execute(&update, rusqlite::params![new_value, rowid])?;
+                        total += 1;
+                    }
                 }
             }
         }
     }
     Ok(total)
+}
+
+/// scan-side counterpart of the sweep: PRAGMA-discovered text columns
+/// probed with the boundary-aware LIKE patterns
+pub fn sqlite_text_hit_count(con: &rusqlite::Connection, spec: &ReplaceSpec) -> usize {
+    let mut hits = 0usize;
+    for (t, c) in sqlite_text_columns(con) {
+        let tq = t.replace('"', "\"\"");
+        let cq = c.replace('"', "\"\"");
+        let sql = format!("SELECT rowid FROM \"{tq}\" WHERE \"{cq}\" LIKE ?");
+        for p in spec.like_patterns() {
+            hits += sqlite_like_count(con, &sql, p.as_str());
+        }
+    }
+    hits
 }
 
 /// agent processes currently running (pgrep -x over every adapter's

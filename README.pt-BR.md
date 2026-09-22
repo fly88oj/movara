@@ -201,7 +201,7 @@ Não suportado (por decisão de projeto):
 
 ```bash
 git clone https://github.com/fly88oj/movara && cd movara
-cargo test --all                          # os 32 testes devem passar
+cargo test --all                          # a suíte completa deve passar
 cargo clippy --all-targets -- -D warnings # nenhum aviso
 cargo fmt --all -- --check
 pre-commit install                        # hooks locais (idênticos ao CI)

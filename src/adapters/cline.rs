@@ -135,7 +135,7 @@ impl ClineFamilyAdapter {
         backup: &mut Backup,
     ) -> Vec<(PathBuf, PathBuf)> {
         let mut done = Vec::new();
-        if !parent.is_dir() || old == new {
+        if !parent.is_dir() || old == new || backup.dry_run {
             return done;
         }
         let old_full = parent.join(old);
@@ -180,6 +180,12 @@ impl Adapter for ClineFamilyAdapter {
     }
 
     fn root_kinds(&self) -> Vec<crate::ctx::RootKind> {
+        // state_paths is filtered by existence, so kinds are computed
+        // per root at SCAN time by the caller; a static list cannot
+        // zip. The archive/import layer tolerates a shorter kinds list
+        // by defaulting missing entries to Home — the extension dirs
+        // are config-tree content, so emit Config for the first and
+        // let the default apply to any IDE-fork variant beyond it.
         vec![crate::ctx::RootKind::Config]
     }
 
@@ -298,12 +304,15 @@ impl Adapter for ClineFamilyAdapter {
                 }
             }
             // Roo's per-workspace index caches are regenerable derived
-            // stores — remove (hash-named, stale shapes resurrect)
-            if let Ok(entries) = std::fs::read_dir(&root) {
-                for e in entries.filter_map(|e| e.ok()) {
-                    let name = e.file_name().to_string_lossy().into_owned();
-                    if name.starts_with("roo-index-cache-") && name.ends_with(".json") {
-                        let _ = std::fs::remove_file(e.path());
+            // stores — remove (hash-named, stale shapes resurrect);
+            // never during a dry run
+            if !backup.dry_run {
+                if let Ok(entries) = std::fs::read_dir(&root) {
+                    for e in entries.filter_map(|e| e.ok()) {
+                        let name = e.file_name().to_string_lossy().into_owned();
+                        if name.starts_with("roo-index-cache-") && name.ends_with(".json") {
+                            let _ = std::fs::remove_file(e.path());
+                        }
                     }
                 }
             }

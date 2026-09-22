@@ -398,9 +398,8 @@ impl Fixture {
     /// legacy flat jsonl whose first line is session metadata, plus a
     /// config-dir permissions file
     fn build_goose(&self) {
-        let db = self
-            .ctx
-            .d(&format!("{}/sessions/sessions.db", goose_data_rel()));
+        let data = goose_data_dir(&self.ctx);
+        let db = data.join("sessions/sessions.db");
         fs::create_dir_all(db.parent().unwrap()).unwrap();
         let con = rusqlite::Connection::open(&db).unwrap();
         con.execute_batch(
@@ -424,24 +423,28 @@ impl Fixture {
         )
         .unwrap();
         drop(con);
-        self.w(
-            &format!(
-                ".local/share/{}/sessions/20260901_000000.jsonl",
-                goose_data_rel()
-            ),
-            &format!(
+        // legacy flat jsonl — written via a raw path because w() is
+        // HOME-relative and the Windows data dir is config-rooted
+        let legacy = data.join("sessions/20260901_000000.jsonl");
+        fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        fs::write(
+            &legacy,
+            format!(
                 "{}\n{}\n",
                 serde_json::json!({"id": "legacy1", "working_dir": self.old}),
                 serde_json::json!({"role": "user", "content": "hi"})
             ),
-        );
-        self.wj(
-            &format!(
-                "{}/permissions/tool_permissions.json",
-                goose_config_rel()
-            ),
-            serde_json::json!({"version": 1, "per_project": {self.old.clone(): {"developer-tools": true}}}),
-        );
+        )
+        .unwrap();
+        let cfg_dir = goose_config_dir(&self.ctx);
+        let perms = cfg_dir.join("permissions/tool_permissions.json");
+        fs::create_dir_all(perms.parent().unwrap()).unwrap();
+        fs::write(
+            &perms,
+            serde_json::json!({"version": 1, "per_project": {self.old.clone(): {"developer-tools": true}}})
+                .to_string(),
+        )
+        .unwrap();
     }
 
     /// Kimi Code: wd_<basename>_<sha256[:12]> buckets — a sessions/
@@ -1119,31 +1122,41 @@ pub fn boundary_contains(raw: &[u8], needle: &str) -> bool {
 
 /// goose's data dir relative to the XDG data root — the adapter mirrors
 /// goose's etcetera strategy (bundle-id dir on macOS)
-pub fn goose_data_rel() -> &'static str {
+/// goose's data dir path — macOS keys it by bundle id under the data
+/// root, Windows nests author/app under the config root (%APPDATA%\
+/// Block\goose\data), Linux is XDG
+pub fn goose_data_dir(ctx: &Ctx) -> PathBuf {
     #[cfg(target_os = "macos")]
     {
-        "Block.block.goose"
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        "goose"
-    }
-}
-
-/// goose's config dir relative to the fixture home (HOME-relative,
-/// because the macOS Preferences dir is not under the config root)
-pub fn goose_config_rel() -> String {
-    #[cfg(target_os = "macos")]
-    {
-        "Library/Preferences/Block.block.goose".to_string()
+        ctx.d("Block.block.goose")
     }
     #[cfg(windows)]
     {
-        ".config/Block/goose".to_string()
+        ctx.c("Block").join("goose").join("data")
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        ".config/goose".to_string()
+        ctx.d("goose")
+    }
+}
+
+/// goose's config dir path (the macOS Preferences dir has no managed
+/// root — HOME-relative)
+pub fn goose_config_dir(ctx: &Ctx) -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        ctx.home
+            .join("Library")
+            .join("Preferences")
+            .join("Block.block.goose")
+    }
+    #[cfg(windows)]
+    {
+        ctx.c("Block").join("goose")
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        ctx.c("goose")
     }
 }
 

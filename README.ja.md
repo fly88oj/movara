@@ -223,7 +223,7 @@ src == dst は拒否します。
 
 ```bash
 git clone https://github.com/fly88oj/movara && cd movara
-cargo test --all                          # 32 件のテストが全て通ること
+cargo test --all                          # 全テストスイートが通ること
 cargo clippy --all-targets -- -D warnings # 警告ゼロ
 cargo fmt --all -- --check
 pre-commit install                        # ローカルフック（CI と同一）

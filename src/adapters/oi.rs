@@ -102,15 +102,7 @@ impl Adapter for OpenInterpreterAdapter {
                     continue;
                 }
                 // closed-schema dbs: generic text-column probe
-                let mut hits = 0usize;
-                for (t, c) in super::sqlite_text_columns(&con) {
-                    let tq = t.replace('\'', "''");
-                    let cq = c.replace('"', "\"\"");
-                    let sql = format!("SELECT rowid FROM \"{tq}\" WHERE \"{cq}\" LIKE ?");
-                    for p in spec.like_patterns() {
-                        hits += super::sqlite_like_count(&con, &sql, p.as_str());
-                    }
-                }
+                let hits = super::sqlite_text_hit_count(&con, spec);
                 if hits > 0 {
                     out.push(mk(
                         self.name(),
@@ -191,19 +183,8 @@ impl Adapter for OpenInterpreterAdapter {
 
 impl OpenInterpreterAdapter {
     fn db_has_sweep_hits(&self, db: &std::path::Path, spec: &ReplaceSpec) -> bool {
-        let Ok(con) = sqlite::open_ro(db) else {
-            return false;
-        };
-        for (t, c) in super::sqlite_text_columns(&con) {
-            let tq = t.replace('\'', "''");
-            let cq = c.replace('"', "\"\"");
-            let sql = format!("SELECT rowid FROM \"{tq}\" WHERE \"{cq}\" LIKE ?");
-            for p in spec.like_patterns() {
-                if super::sqlite_like_count(&con, &sql, p.as_str()) > 0 {
-                    return true;
-                }
-            }
-        }
-        false
+        sqlite::open_ro(db)
+            .map(|con| super::sqlite_text_hit_count(&con, spec) > 0)
+            .unwrap_or(false)
     }
 }

@@ -73,8 +73,11 @@ impl Adapter for QoderAdapter {
     }
 
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
+        // NO existence filtering: root_kinds is a fixed zip-aligned
+        // list; the archive layer skips missing paths on its own
         let mut v = vec![self.base().ide_db(ctx)];
-        v.extend(self.tree_roots(ctx));
+        v.push(ctx.h(".qoder"));
+        v.push(ctx.h(".lingma"));
         v
     }
 

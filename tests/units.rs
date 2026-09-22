@@ -596,30 +596,22 @@ fn live_agent_processes_reports_nothing_for_idle_names() {
 fn goose_working_dir_legacy_metadata_and_permissions_move() {
     let fx = Fixture::new("units-goose");
     fx.migrate(false);
-    let con = rusqlite::Connection::open(fx.ctx.d(&format!(
-        "{}/sessions/sessions.db",
-        common::goose_data_rel()
-    )))
-    .unwrap();
+    let data = common::goose_data_dir(&fx.ctx);
+    let con = rusqlite::Connection::open(data.join("sessions/sessions.db")).unwrap();
     let wd: String = con
         .query_row("SELECT working_dir FROM sessions", [], |r| r.get(0))
         .unwrap();
     assert_eq!(wd, fx.new);
     drop(con);
-    let first = read(&fx.ctx.d(&format!(
-        "{}/sessions/20260901_000000.jsonl",
-        common::goose_data_rel()
-    )))
-    .lines()
-    .next()
-    .unwrap()
-    .to_string();
+    let first = read(&data.join("sessions/20260901_000000.jsonl"))
+        .lines()
+        .next()
+        .unwrap()
+        .to_string();
     let meta: serde_json::Value = serde_json::from_str(&first).unwrap();
     assert_eq!(meta["working_dir"], json!(fx.new));
     let perms: serde_json::Value = serde_json::from_str(&read(
-        &fx.ctx
-            .h(&common::goose_config_rel())
-            .join("permissions/tool_permissions.json"),
+        &common::goose_config_dir(&fx.ctx).join("permissions/tool_permissions.json"),
     ))
     .unwrap();
     assert!(

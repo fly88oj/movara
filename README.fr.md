@@ -202,7 +202,7 @@ Non pris en charge (volontairement) :
 
 ```bash
 git clone https://github.com/fly88oj/movara && cd movara
-cargo test --all                          # les 32 tests doivent passer
+cargo test --all                          # la suite complète doit passer
 cargo clippy --all-targets -- -D warnings # aucun avertissement
 cargo fmt --all -- --check
 pre-commit install                        # hooks locaux (identiques à la CI)

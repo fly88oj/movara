@@ -79,15 +79,7 @@ impl Adapter for WarpAdapter {
         let db = self.db(ctx);
         if db.is_file() {
             if let Ok(con) = sqlite::open_ro(&db) {
-                let mut hits = 0usize;
-                for (t, c) in super::sqlite_text_columns(&con) {
-                    let tq = t.replace('\'', "''");
-                    let cq = c.replace('"', "\"\"");
-                    let sql = format!("SELECT rowid FROM \"{tq}\" WHERE \"{cq}\" LIKE ?");
-                    for p in spec.like_patterns() {
-                        hits += super::sqlite_like_count(&con, &sql, p.as_str());
-                    }
-                }
+                let hits = super::sqlite_text_hit_count(&con, spec);
                 if hits > 0 {
                     out.push(mk(self.name(), "db", &db, &format!("{} rows", hits)));
                 }

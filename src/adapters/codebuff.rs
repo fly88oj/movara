@@ -100,7 +100,7 @@ impl Adapter for CodebuffAdapter {
                             new = new_d.display().to_string().as_str()
                         )
                     );
-                } else {
+                } else if !backup.dry_run {
                     backup.record_rename(&old_d, &new_d);
                     if std::fs::rename(&old_d, &new_d).is_ok() {
                         actions.push(mk(

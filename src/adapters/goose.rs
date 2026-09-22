@@ -30,12 +30,19 @@ pub struct GooseAdapter;
 
 impl GooseAdapter {
     fn data_dir(&self, ctx: &Ctx) -> PathBuf {
-        // etcetera Apple strategy keys the data dir by bundle id
+        // etcetera Apple strategy keys the data dir by bundle id; the
+        // Windows strategy nests author/app under the config root and
+        // puts data there too (%APPDATA%\Block\goose\data — the data
+        // ROOT itself, not a data-local sibling)
         #[cfg(target_os = "macos")]
         {
             ctx.d("Block.block.goose")
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(windows)]
+        {
+            ctx.c("Block").join("goose").join("data")
+        }
+        #[cfg(all(unix, not(target_os = "macos")))]
         {
             ctx.d("goose")
         }
@@ -84,12 +91,17 @@ impl Adapter for GooseAdapter {
 
     fn root_kinds(&self) -> Vec<crate::ctx::RootKind> {
         // aligned with state_paths: data dir, then config dir (the
-        // macOS Preferences dir has no managed root — Home segment)
+        // macOS Preferences dir has no managed root — Home segment;
+        // on Windows BOTH live under the %APPDATA% config root)
         #[cfg(target_os = "macos")]
         {
             vec![crate::ctx::RootKind::Data, crate::ctx::RootKind::Home]
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(windows)]
+        {
+            vec![crate::ctx::RootKind::Config, crate::ctx::RootKind::Config]
+        }
+        #[cfg(all(unix, not(target_os = "macos")))]
         {
             vec![crate::ctx::RootKind::Data, crate::ctx::RootKind::Config]
         }
