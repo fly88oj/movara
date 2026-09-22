@@ -66,6 +66,10 @@ impl Adapter for CodexAdapter {
          threads.cwd (0.147+)"
     }
 
+    fn process_names(&self) -> &'static [&'static str] {
+        &["codex"]
+    }
+
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
         vec![ctx.h(".codex")]
     }

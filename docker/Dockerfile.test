@@ -1,0 +1,18 @@
+# movara full test suite in an isolated container: no host state, no
+# host cargo caches, a throwaway HOME. Used by `docker compose run test`
+# (compile happens at build time; the suite runs at container start so
+# its output is visible).
+FROM rust:1.98-slim-bookworm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git pkg-config libsqlite3-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+# throwaway HOME so nothing touches a real user's agent state
+ENV HOME=/tmp/home
+RUN mkdir -p /tmp/home && cargo test --no-run
+
+CMD ["cargo", "test"]

@@ -660,6 +660,9 @@ pub fn perform_move<'f>(
     let names: Option<Vec<String>> =
         agents.map(|a| a.split(',').map(|s| s.trim().to_string()).collect());
     let list = adapters::get_adapters(names.as_deref())?;
+    if !dry_run {
+        live_gate(&list, yes)?;
+    }
 
     // preflight A: what on THIS host references the source
     let probe = ReplaceSpec::new(&src_abs.to_string_lossy(), &src_abs.to_string_lossy())?;
@@ -861,6 +864,10 @@ fn cmd_receive(ctx: &Ctx, dst: &Path, plan_only: bool, yes: bool, json: bool) ->
     if std::io::stdin().is_terminal() {
         bail!("{}", t!("receive.err_tty"));
     }
+    // the landing side has the same live-agent hazard as the sending
+    // side: a running agent here will rewrite what just landed
+    let gate_list = adapters::get_adapters(None)?;
+    live_gate(&gate_list, true)?;
     // re-check on the target before the stream lands anything
     if !crate::archive::dst_available(&dst_abs) {
         bail!(
@@ -1062,6 +1069,25 @@ fn cmd_scan(ctx: &Ctx, common: &CommonArgs, frm: &Path, to: Option<&Path>) -> Re
 }
 
 #[allow(clippy::too_many_arguments)]
+/// live-agent gate for every mutating command: a running agent holds
+/// its state registry in memory and re-persists it after the rewrite
+/// (observed with Kimi Code's background server re-creating a renamed
+/// session bucket). Refused without --yes; with --yes a loud warning
+/// and the run proceeds.
+fn live_gate(list: &[Box<dyn Adapter>], yes: bool) -> Result<()> {
+    let live = adapters::live_agent_processes(list);
+    if live.is_empty() {
+        return Ok(());
+    }
+    let names = live.join(", ");
+    if !yes {
+        bail!("{}", t!("mv.err_live_agents", agents = names.as_str()));
+    }
+    eprintln!("{}", t!("mv.warn_live_agents", agents = names.as_str()));
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
 fn cmd_migrate(
     ctx: &Ctx,
     common: &CommonArgs,
@@ -1078,6 +1104,9 @@ fn cmd_migrate(
         anyhow::bail!("{}", t!("migrate.err_same", path = spec.old.as_str()));
     }
     let adapters = adapters_for(common)?;
+    if !dry_run {
+        live_gate(&adapters, yes)?;
+    }
     if !yes && !dry_run {
         print!(
             "{}",
@@ -1177,6 +1206,9 @@ fn cmd_mv(
     let (src_abs, new_abs) = mv_resolve(src, dst)?;
     let spec = ReplaceSpec::new(&src_abs.to_string_lossy(), &new_abs.to_string_lossy())?;
     let adapters = adapters_for(common)?;
+    if !dry_run {
+        live_gate(&adapters, yes)?;
+    }
     // preflight
     let mut findings = Vec::new();
     for a in &adapters {

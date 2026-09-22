@@ -454,6 +454,10 @@ impl Adapter for ClaudeAdapter {
          keys + history.jsonl project fields"
     }
 
+    fn process_names(&self) -> &'static [&'static str] {
+        &["claude"]
+    }
+
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
         vec![ctx.h(".claude"), ctx.h(".claude.json")]
     }
@@ -532,6 +536,10 @@ impl Adapter for OmpAdapter {
         "~/.omp/agent/sessions/<omp-bucket>/ (home-relative dash encoding \
          of the canonical cwd) with cwd in the session header + \
          history.db history.cwd"
+    }
+
+    fn process_names(&self) -> &'static [&'static str] {
+        &["omp"]
     }
 
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
@@ -632,6 +640,30 @@ fn omp_buckets(ctx: &Ctx, spec: &ReplaceSpec) -> (String, String) {
 }
 
 // ============================================================ registry
+
+/// agent processes currently running (pgrep -x over every adapter's
+/// process_names). The live gate for mv/migrate/move/receive: a running
+/// agent holds its registry in memory and re-persists it after the
+/// rewrite — observed in the wild when Kimi Code's background server
+/// re-created a renamed session bucket minutes after a successful
+/// migration.
+pub fn live_agent_processes(list: &[Box<dyn Adapter>]) -> Vec<String> {
+    let mut out = Vec::new();
+    for adapter in list {
+        for name in adapter.process_names() {
+            let alive = std::process::Command::new("pgrep")
+                .arg("-x")
+                .arg(name)
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            if alive {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out
+}
 
 pub fn all() -> Vec<Box<dyn Adapter>> {
     vec![

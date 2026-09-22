@@ -55,6 +55,10 @@ impl Adapter for ZcodeAdapter {
          memories/projects/<basename>-<sha256(cwd)[:16]>"
     }
 
+    fn process_names(&self) -> &'static [&'static str] {
+        &["zcode"]
+    }
+
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
         vec![ctx.h(".zcode")]
     }

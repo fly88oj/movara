@@ -46,6 +46,10 @@ impl Adapter for ContinueAdapter {
          sessions/sessions.json, index/index.sqlite tag_catalog.dir"
     }
 
+    fn process_names(&self) -> &'static [&'static str] {
+        &["continue"]
+    }
+
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
         vec![ctx.h(".continue")]
     }
@@ -144,6 +148,10 @@ impl Adapter for PiAdapter {
         "~/.pi/agent/sessions/--<encoded-cwd>--/ (header cwd), \
          projects-memory/<basename>/ (3rd-party memory ext), \
          run-history.jsonl, settings.json"
+    }
+
+    fn process_names(&self) -> &'static [&'static str] {
+        &["pi"]
     }
 
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
@@ -256,6 +264,10 @@ impl Adapter for DroidAdapter {
          only slashes turned into dashes (dots/underscores kept)"
     }
 
+    fn process_names(&self) -> &'static [&'static str] {
+        &["droid"]
+    }
+
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
         vec![ctx.h(".factory")]
     }
@@ -336,6 +348,10 @@ impl Adapter for CrushAdapter {
          data_dir} per project"
     }
 
+    fn process_names(&self) -> &'static [&'static str] {
+        &["crush"]
+    }
+
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
         self.roots(ctx)
     }
@@ -377,6 +393,10 @@ impl Adapter for AiderAdapter {
     fn note(&self) -> &'static str {
         "~/.aider.conf.yml (abs paths in config); per-project .aider* \
          files live inside the project dir and move with it"
+    }
+
+    fn process_names(&self) -> &'static [&'static str] {
+        &["aider"]
     }
 
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
@@ -427,6 +447,10 @@ impl Adapter for CcConnectAdapter {
     fn note(&self) -> &'static str {
         "~/.cc-connect/dir_history.json (per-project dir MRU) + \
          sessions/<project>_<sha256(workDir)[:8]>.json file names"
+    }
+
+    fn process_names(&self) -> &'static [&'static str] {
+        &["cc-connect"]
     }
 
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {

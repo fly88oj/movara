@@ -70,6 +70,9 @@ impl Adapter for GeminiAdapter {
     fn name(&self) -> &'static str {
         "gemini"
     }
+    fn process_names(&self) -> &'static [&'static str] {
+        &["gemini"]
+    }
     fn display(&self) -> &'static str {
         "Gemini CLI"
     }
@@ -249,11 +252,13 @@ struct ForkCfg {
     name: &'static str,
     display: &'static str,
     note: &'static str,
+    process_name: &'static str,
     is_iflow: bool,
 }
 
 const QWEN: ForkCfg = ForkCfg {
     state_rel: ".qwen",
+    process_name: "qwen",
     name: "qwen",
     display: "Qwen Code",
     note: "~/.qwen/projects/<dash-encoded-cwd>/chats/*.jsonl (records \
@@ -264,6 +269,7 @@ const QWEN: ForkCfg = ForkCfg {
 
 const IFLOW: ForkCfg = ForkCfg {
     state_rel: ".iflow",
+    process_name: "iflow",
     name: "iflow",
     display: "iFlow CLI",
     note: "~/.iflow/projects/<fromPath-encoded>/ + \
@@ -329,6 +335,10 @@ macro_rules! fork_impl {
 
             fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
                 vec![ctx.h(self.cfg().state_rel)]
+            }
+
+            fn process_names(&self) -> &'static [&'static str] {
+                std::slice::from_ref(&self.cfg().process_name)
             }
 
             fn scan(&self, ctx: &Ctx, spec: &ReplaceSpec) -> Vec<Finding> {

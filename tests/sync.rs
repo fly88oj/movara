@@ -298,11 +298,15 @@ fn probe_reports_hot_on_fresh_state() {
         "the referencing session file must be listed"
     );
     // a different project path has no referencing members: the gate
-    // rests on WAL/processes only (freshness 0 = nothing counts as fresh)
+    // rests on WAL/processes only (freshness 0 = nothing counts as
+    // fresh). Which processes are live depends on the machine this runs
+    // on, so only assert that the verdict is fully explained by them.
     let rep2 = sync::probe(&c, &list, "/other/project", 0);
     assert!(rep2.fresh_members.is_empty());
-    assert!(rep2.processes.is_empty());
-    assert!(!rep2.hot);
+    assert_eq!(
+        rep2.hot,
+        !rep2.processes.is_empty() || !rep2.fresh_wal.is_empty()
+    );
     let _ = fs::remove_dir_all(&tmp);
 }
 

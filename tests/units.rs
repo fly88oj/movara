@@ -533,3 +533,32 @@ fn kimi_buckets_files_and_index_all_move() {
     assert!(session_evt.contains(&b_new) && !session_evt.contains(&b_old));
     assert!(session_evt.contains(&norm(&fx.new)) && !session_evt.contains(&norm(&fx.old)));
 }
+
+#[test]
+fn live_agent_processes_reports_nothing_for_idle_names() {
+    struct Idle;
+    impl movara::adapters::Adapter for Idle {
+        fn name(&self) -> &'static str {
+            "idle"
+        }
+        fn display(&self) -> &'static str {
+            "Idle"
+        }
+        fn note(&self) -> &'static str {
+            ""
+        }
+        fn state_paths(&self, _ctx: &movara::ctx::Ctx) -> Vec<std::path::PathBuf> {
+            Vec::new()
+        }
+        fn process_names(&self) -> &'static [&'static str] {
+            &["movara-definitely-not-running-xyz"]
+        }
+    }
+    let list: Vec<Box<dyn movara::adapters::Adapter>> = vec![Box::new(Idle)];
+    assert!(
+        movara::adapters::live_agent_processes(&list).is_empty(),
+        "an idle process name must not gate"
+    );
+    // the real registry never panics, whatever is running locally
+    let _ = movara::adapters::live_agent_processes(&movara::adapters::all());
+}

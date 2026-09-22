@@ -75,6 +75,10 @@ impl Adapter for OpencodeAdapter {
          workspace.directory / project_directory.directory"
     }
 
+    fn process_names(&self) -> &'static [&'static str] {
+        &["opencode"]
+    }
+
     fn state_paths(&self, ctx: &Ctx) -> Vec<PathBuf> {
         vec![ctx.d("opencode")]
     }

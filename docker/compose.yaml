@@ -1,0 +1,16 @@
+# Isolated test matrix for movara. Every service is throwaway: agent
+# installs land in the container, state is generated under /tmp/home,
+# the host is never touched. Run from the repo root:
+#
+#   docker compose -f docker/compose.yaml run --rm test
+#
+# Per-agent verification services (goose, codebuff, ...) are
+# added alongside their adapters; each installs the real agent CLI in
+# its own container and exercises movara against generated state.
+name: movara-test
+
+services:
+  test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
