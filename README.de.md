@@ -186,6 +186,7 @@ Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den A
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | Task-`path`-Felder + `workspace`/`cwdOnTaskInitialization` + Checkpoint-`core.worktree` + cwdHash/sha256-Buckets |
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | Basename-Bucket + run-state `cwd` |
+| gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (auch Tilde-Form) + `workspace`-Symlink + `files`-Listen |
 
 Nicht unterstützt (bewusst so entschieden):
 

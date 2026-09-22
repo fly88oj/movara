@@ -183,6 +183,7 @@ movara undo --id 20260903-131427-644777
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | 태스크 `path` 필드 + `workspace`/`cwdOnTaskInitialization` + 체크포인트 `core.worktree` + cwdHash/sha256 버킷 |
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | basename 버킷 + run-state `cwd` |
+| gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace`(틸드 형식 포함) + `workspace` 심볼릭 링크 + `files` 목록 |
 
 지원하지 않음(의도된 결정):
 

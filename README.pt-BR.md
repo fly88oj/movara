@@ -184,6 +184,7 @@ Um `move` entre hosts adiciona a árvore do projeto (com `.git`) à troca: `--st
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | campos `path` das tarefas + `workspace`/`cwdOnTaskInitialization` + `core.worktree` dos checkpoints + buckets cwdHash/sha256 |
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bucket por basename + `cwd` do run-state |
+| gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (forma com til inclusive) + symlink `workspace` + listas `files` |
 
 Não suportado (por decisão de projeto):
 

@@ -206,6 +206,7 @@ src == dst は拒否します。
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | タスクの `path` フィールド + `workspace`/`cwdOnTaskInitialization` + チェックポイントの `core.worktree` + cwdHash/sha256 バケット |
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | ベア basename バケット + run-state `cwd` |
+| gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace`（チルダ形式含む）+ `workspace` シンボリックリンク + `files` リスト |
 
 非対応（意図的な判断）：
 

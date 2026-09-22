@@ -208,6 +208,7 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | task `path` fields + `workspace`/`cwdOnTaskInitialization` + checkpoints `core.worktree` + cwdHash/sha256 buckets |
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bare-basename bucket + run-state `cwd` |
+| gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (tilde form too) + `workspace` symlink + `files` lists |
 
 Not supported (by design):
 

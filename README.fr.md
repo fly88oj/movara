@@ -185,6 +185,7 @@ Un `move` inter-hôtes ajoute l'arborescence du projet (avec `.git`) à l'échan
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | champs `path` des tâches + `workspace`/`cwdOnTaskInitialization` + `core.worktree` des checkpoints + buckets cwdHash/sha256 |
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bucket par basename + `cwd` de run-state |
+| gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (forme tilde incluse) + lien symbolique `workspace` + listes `files` |
 
 Non pris en charge (volontairement) :
 

@@ -90,6 +90,32 @@ impl Fixture {
         self.build_cline();
         self.build_openhands();
         self.build_codebuff();
+        self.build_gptme();
+    }
+
+    /// gptme: ~/.local/share/gptme/logs/<date>-<name>/ with config.toml
+    /// [chat] workspace, a workspace symlink, and files lists in the
+    /// conversation jsonl
+    fn build_gptme(&self) {
+        let conv = ".local/share/gptme/logs/2026-09-01-happy-walrus";
+        self.w(
+            &format!("{conv}/config.toml"),
+            &format!(
+                "[chat]\nname = \"happy walrus\"\nworkspace = \"{}\"\n",
+                self.old
+            ),
+        );
+        self.w(
+            &format!("{conv}/conversation.jsonl"),
+            &format!(
+                "{}\n{}\n",
+                serde_json::json!({"role": "user", "content": "hi"}),
+                serde_json::json!({"role": "assistant", "content": "done",
+                    "files": [format!("{}/main.rs", self.old)]})
+            ),
+        );
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&self.old, self.ctx.h(&format!("{conv}/workspace"))).unwrap();
     }
 
     /// OpenHands: ~/.openhands conversations/<uuid>/events + base

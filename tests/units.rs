@@ -739,3 +739,60 @@ fn codebuff_basename_bucket_and_run_state_move() {
         serde_json::from_str(&read(&root.join(&new_b).join(chat).join("run-state.json"))).unwrap();
     assert_eq!(rs["sessionState"]["cwd"], json!(fx.new));
 }
+
+#[test]
+fn gptme_workspace_config_files_lists_and_symlink_move() {
+    let fx = Fixture::new("units-gptme");
+    fx.migrate(false);
+    let conv = fx.ctx.d("gptme/logs/2026-09-01-happy-walrus");
+    // config.toml [chat] workspace follows (absolute form)
+    let cfg = read(&conv.join("config.toml"));
+    assert!(cfg.contains(&fx.new) && !cfg.contains(&fx.old));
+    // message files lists follow (identity list key)
+    let jsonl = read(&conv.join("conversation.jsonl"));
+    let last = jsonl.lines().last().unwrap();
+    let msg: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(msg["files"][0], json!(format!("{}/main.rs", fx.new)));
+    // the workspace symlink is retargeted, not followed
+    #[cfg(unix)]
+    {
+        let t = std::fs::read_link(conv.join("workspace")).unwrap();
+        assert_eq!(t, std::path::PathBuf::from(&fx.new));
+    }
+}
+
+#[test]
+fn gptme_tilde_workspace_form_is_rewritten() {
+    // gptme abbreviates under-home paths to ~/... on save; the absolute
+    // needle alone never matches that form
+    use movara::ctx::Ctx;
+    let tmp = std::env::temp_dir().join(format!("movara-gptme-tilde-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(tmp.join("home/.local/share/gptme/logs/c1")).unwrap();
+    fs::create_dir_all(tmp.join("home/proj/abc")).unwrap();
+    let ctx = Ctx {
+        home: tmp.join("home"),
+        config_home: tmp.join("home/.config"),
+        data_home: tmp.join("home/.local/share"),
+    };
+    let old = tmp.join("home/proj/abc").to_string_lossy().into_owned();
+    let new = tmp.join("home/proj/cba").to_string_lossy().into_owned();
+    let conv = ctx.d("gptme/logs/c1");
+    fs::write(
+        conv.join("config.toml"),
+        "[chat]\nname = \"n\"\nworkspace = \"~/proj/abc\"\n",
+    )
+    .unwrap();
+    fs::write(conv.join("conversation.jsonl"), "{}\n").unwrap();
+    let spec = ReplaceSpec::new(&old, &new).unwrap();
+    let mut bk = movara::backup::Backup::new(&tmp.join("bk"), &spec, vec![], false);
+    let gptme = movara::adapters::get_adapters(Some(&["gptme".to_string()])).unwrap();
+    gptme[0].migrate(&ctx, &spec, &mut bk, false).unwrap();
+    let cfg = read(&conv.join("config.toml"));
+    assert!(
+        cfg.contains("~/proj/cba") && !cfg.contains("~/proj/abc"),
+        "tilde form must follow: {}",
+        cfg
+    );
+    let _ = fs::remove_dir_all(&tmp);
+}

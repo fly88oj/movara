@@ -210,6 +210,7 @@ Un `move` entre hosts añade el árbol del proyecto (con `.git`) al intercambio:
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | campos `path` de tareas + `workspace`/`cwdOnTaskInitialization` + `core.worktree` de checkpoints + buckets cwdHash/sha256 |
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bucket de basename + `cwd` de run-state |
+| gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (forma con tilde incluida) + symlink `workspace` + listas `files` |
 
 Sin soporte (por decisión de diseño):
 

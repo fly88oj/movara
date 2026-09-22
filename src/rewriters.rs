@@ -48,6 +48,7 @@ pub const JSON_LIST_FIELD_KEYS: &[&str] = &[
     "folders",
     "roots",
     "workspace_folders",
+    "files",
 ];
 
 /// keep only the identity-ish top-level fields of a JSON value (archive
