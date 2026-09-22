@@ -7,11 +7,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# the CLI itself (official install script; it drops the binary into
-# ~/.local/bin, which is not on PATH by default in the image)
-RUN curl -fsSL https://github.com/block/goose/releases/download/stable/download-goose.sh | bash || true
-ENV PATH="/root/.local/bin:${PATH}"
-RUN goose version || ls -la /root/.local/bin /usr/local/bin | head -20
+# the CLI itself (GitHub release tarball, asset goose-x86_64-…-gnu.tar.gz;
+# the tarball extracts ./goose at depth 1 and takes --version)
+RUN URL=$(curl -fsSL https://api.github.com/repos/block/goose/releases/latest | grep -oE '"browser_download_url": *"[^"]*x86_64-unknown-linux-gnu\.tar\.gz"' | grep -oE 'https[^"]*' | head -1) \
+    && mkdir /tmp/gx && curl -fsSL "$URL" | tar -xz -C /tmp/gx \
+    && cp /tmp/gx/goose /usr/local/bin/goose && chmod +x /usr/local/bin/goose \
+    && goose --version
 
 # movara, built from the repo
 WORKDIR /src

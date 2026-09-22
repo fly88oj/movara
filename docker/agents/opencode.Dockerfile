@@ -4,10 +4,10 @@
 FROM rust:1.98-slim-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 \
+    && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN (curl -fsSL https://opencode.ai/install | bash && opencode --version) || echo "install channel unreachable — synthetic verification proceeds"
+RUN npm install -g opencode-ai && opencode --version
 
 WORKDIR /src
 COPY . .

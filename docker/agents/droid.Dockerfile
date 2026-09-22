@@ -7,7 +7,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @factory-ai/droid && droid --version || echo "npm channel unreachable — synthetic verification proceeds"
+# the real CLI (factory's install script drops it in ~/.local/bin)
+RUN curl -fsSL https://app.factory.ai/cli | sh && /root/.local/bin/droid --version
+ENV PATH="/root/.local/bin:${PATH}"
 
 WORKDIR /src
 COPY . .

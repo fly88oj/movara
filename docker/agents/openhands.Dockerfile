@@ -1,17 +1,16 @@
 # OpenHands verification container: pip-installs the real CLI, then
 # runs a scan/migrate/undo round trip against synthetic state shaped
 # like the real layout (conversations events + projects/<sha256(realpath)>).
-FROM rust:1.98-slim-bookworm
+# trixie ships Python 3.13 — openhands-ai requires >=3.12
+FROM rust:1.98-slim-trixie
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# the real CLI (PyPI's "openhands" is a 0.0.0 squatter — install from
-# the project's own repo, best effort)
-RUN pip install --break-system-packages "openhands-cli @ git+https://github.com/OpenHands/OpenHands-CLI" \
+# the real CLI (PyPI: openhands-ai; PyPI's "openhands" is a 0.0.0 squatter)
+RUN pip install --break-system-packages openhands-ai \
     && openhands --version \
-    || pip install --break-system-packages openhands-ai \
     || echo "pip channel unreachable — synthetic verification proceeds"
 
 WORKDIR /src

@@ -7,7 +7,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN (curl -fsSL https://www.crush.dev/install.sh | bash && crush --version) || echo "install channel unreachable — synthetic verification proceeds"
+# the real CLI (GitHub release .deb, charmbracelet/crush)
+RUN URL=$(curl -fsSL https://api.github.com/repos/charmbracelet/crush/releases/latest | grep -oE '"browser_download_url": *"[^"]*_[0-9.]+_amd64\.deb"' | grep -oE 'https[^"]*' | head -1) \
+    && curl -fsSL "$URL" -o /tmp/crush.deb && dpkg -i /tmp/crush.deb && crush --version
 
 WORKDIR /src
 COPY . .

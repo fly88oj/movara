@@ -5,11 +5,12 @@
 FROM rust:1.98-slim-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates \
+    && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-# the real CLI (best effort across the known distribution channels)
-RUN curl -fsSL https://github.com/github-copilot-cli/copilot-cli/releases/latest/download/copilot-linux-amd64 -o /usr/local/bin/copilot && chmod +x /usr/local/bin/copilot && copilot --version || echo "binary channel unreachable — synthetic verification proceeds"
+# the real CLI (npm @github/copilot — the GA native binary's brew/GitHub
+# channels are authenticated; the npm package ships the same CLI)
+RUN npm install -g @github/copilot && copilot --version
 
 WORKDIR /src
 COPY . .

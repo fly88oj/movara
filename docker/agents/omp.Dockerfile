@@ -7,7 +7,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g oh-my-pi && omp --version || echo "npm channel unreachable — synthetic verification proceeds"
+RUN npm install -g oh-my-pi && oh-my-pi --version || echo "npm channel unreachable — synthetic verification proceeds"
 
 WORKDIR /src
 COPY . .
