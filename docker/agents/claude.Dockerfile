@@ -1,5 +1,6 @@
 # Claude Code verification container: npm-installs the real CLI, then
-# runs a scan/migrate/undo round trip (dash bucket + .claude.json keys).
+# runs a scan/migrate/undo round trip (dash bucket + .claude.json keys
+# + lowercase teams bucket + session-data worktree headers).
 FROM rust:1.98-slim-bookworm
 
 RUN apt-get update \
@@ -21,18 +22,35 @@ print(re.sub(r'[^A-Za-z0-9]', '-', sys.argv[1]))" "$T/proj/abc")
 ENCN=$(python3 -c "
 import re, sys
 print(re.sub(r'[^A-Za-z0-9]', '-', sys.argv[1]))" "$T/proj/cba")
+# the teams buckets carry the same encoding, lowercased
+ENCT=$(python3 -c "
+import re, sys
+print(re.sub(r'[^A-Za-z0-9]', '-', sys.argv[1]).lower())" "$T/proj/abc")
+ENCNT=$(python3 -c "
+import re, sys
+print(re.sub(r'[^A-Za-z0-9]', '-', sys.argv[1]).lower())" "$T/proj/cba")
 P=$T/home/.claude/projects/$ENC
-mkdir -p $P $T/proj/abc
+TM=$T/home/.claude/teams/$ENCT
+SD=$T/home/.claude/session-data
+mkdir -p $P $TM $SD $T/proj/abc
 printf '{"type":"user","cwd":"%s/proj/abc","sessionId":"s1"}\n' "$T" > $P/sess1.jsonl
 printf '{"numStartups":5,"projects":{"%s/proj/abc":{"allowedTools":[]}}}' "$T" > $T/home/.claude.json
+printf '{"workDir":"%s/proj/abc"}' "$T" > $TM/config.json
+printf '**Worktree:** %s/proj/abc\n' "$T" > $SD/2026-01-01-x.tmp
 export MOVARA_HOME=$T/home
 /src/target/debug/movara migrate --from $T/proj/abc --to $T/proj/cba --agents claude --yes
 [ -d $T/home/.claude/projects/$ENCN ] && [ ! -d $P ]
 grep -q "$T/proj/cba" $T/home/.claude/projects/$ENCN/sess1.jsonl
 grep -q "$T/proj/cba" $T/home/.claude.json && ! grep -q "$T/proj/abc" $T/home/.claude.json
 echo "claude: dash bucket + .claude.json projects key rekeyed OK"
+[ -d $T/home/.claude/teams/$ENCNT ] && [ ! -d $TM ]
+grep -q "$T/proj/cba" $T/home/.claude/teams/$ENCNT/config.json && ! grep -q "$T/proj/abc" $T/home/.claude/teams/$ENCNT/config.json
+grep -q "$T/proj/cba" $SD/2026-01-01-x.tmp && ! grep -q "$T/proj/abc" $SD/2026-01-01-x.tmp
+echo "claude: teams bucket + workDir + session-data worktree rekeyed OK"
 /src/target/debug/movara undo --id $(ls $T/home/.movara/backups | tail -1)
 [ -d $P ] && grep -q "$T/proj/abc" $P/sess1.jsonl
+[ -d $TM ] && grep -q "$T/proj/abc" $TM/config.json
+grep -q "$T/proj/abc" $SD/2026-01-01-x.tmp
 echo "claude: undo restored OK"
 EOF
 

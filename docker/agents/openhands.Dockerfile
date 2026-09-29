@@ -28,15 +28,42 @@ mkdir -p $EV $OH/projects/$P $T/proj/abc
 printf '{"payload": {"session": {"id": "conv1", "metadata": {"cwd": "%s/proj/abc"}}}}' "$T" > $EV/event-00001-abc.json
 printf '{"working_dir": "%s/proj/abc", "model": "x"}' "$T" > $OH/agent_settings.json
 printf '{"prompts": ["hi"]}' > $OH/projects/$P/prompt_history.json
+# openhands.db conversation_metadata.tags embeds the archived workspace
+# path as a JSON string under 'archiveworkspacepath'
+python3 - <<PY
+import os, sqlite3
+t = os.environ.get("T", "/tmp/verify")
+con = sqlite3.connect(t + "/home/.openhands/openhands.db")
+con.execute("CREATE TABLE conversation_metadata (conversation_id TEXT PRIMARY KEY, tags TEXT)")
+con.execute("INSERT INTO conversation_metadata VALUES ('c1', ?)",
+            ('{"archiveworkspacepath": "%s/proj/abc"}' % t,))
+con.commit()
+PY
 export MOVARA_HOME=$T/home
 /src/target/debug/movara migrate --from $T/proj/abc --to $T/proj/cba --agents openhands --yes
 [ -d $OH/projects/$PN ] && [ ! -d $OH/projects/$P ]
 grep -q "$T/proj/cba" $EV/event-00001-abc.json
 grep -q "$T/proj/cba" $OH/agent_settings.json
 echo "openhands: project bucket + working_dir + event cwd rekeyed OK"
+python3 - <<PY
+import os, sqlite3
+t = os.environ.get("T", "/tmp/verify")
+tags = sqlite3.connect(t + "/home/.openhands/openhands.db").execute(
+    "SELECT tags FROM conversation_metadata WHERE conversation_id='c1'").fetchone()[0]
+assert t + "/proj/cba" in tags and t + "/proj/abc" not in tags
+print("openhands: conversation_metadata.tags archived workspace path rekeyed OK")
+PY
 /src/target/debug/movara undo --id $(ls $T/home/.movara/backups | tail -1)
 [ -d $OH/projects/$P ] && [ ! -d $OH/projects/$PN ]
 echo "openhands: undo restored OK"
+python3 - <<PY
+import os, sqlite3
+t = os.environ.get("T", "/tmp/verify")
+tags = sqlite3.connect(t + "/home/.openhands/openhands.db").execute(
+    "SELECT tags FROM conversation_metadata WHERE conversation_id='c1'").fetchone()[0]
+assert t + "/proj/abc" in tags and t + "/proj/cba" not in tags
+print("openhands: undo restored openhands.db OK")
+PY
 EOF
 
 CMD ["echo", "openhands adapter verification passed"]

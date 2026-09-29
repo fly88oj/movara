@@ -1,7 +1,8 @@
 # Open Interpreter verification container: fetches the real Rust CLI
 # binary from GitHub releases (best effort), then runs a
 # scan/migrate/undo round trip against synthetic state shaped like the
-# Codex-rebased layout (~/.openinterpreter).
+# Codex-rebased layout (~/.openinterpreter, incl. the 0.147+ state DB
+# threads.cwd / project_roots.path faces).
 FROM rust:1.98-slim-bookworm
 
 RUN apt-get update \
@@ -36,6 +37,8 @@ t = os.environ.get("T", "/tmp/verify")
 con = sqlite3.connect(t + "/home/.openinterpreter/state_5.sqlite")
 con.execute("CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT, cwd TEXT NOT NULL)")
 con.execute("INSERT INTO threads VALUES ('t1', '/x/r.jsonl', ?)", (t + "/proj/abc",))
+con.execute("CREATE TABLE project_roots (project_id TEXT, position INTEGER, path TEXT)")
+con.execute("INSERT INTO project_roots VALUES ('pr1', 0, ?)", (t + "/proj/abc",))
 con.commit()
 con2 = sqlite3.connect(t + "/home/.openinterpreter/memories_1.sqlite")
 con2.execute("CREATE TABLE memories (id INTEGER PRIMARY KEY, body TEXT)")
@@ -51,12 +54,21 @@ import sqlite3, os
 t = os.environ.get("T", "/tmp/verify")
 con = sqlite3.connect(t + "/home/.openinterpreter/state_5.sqlite")
 assert con.execute("SELECT cwd FROM threads").fetchone()[0] == t + "/proj/cba"
+assert con.execute("SELECT path FROM project_roots").fetchone()[0] == t + "/proj/cba"
 mem = sqlite3.connect(t + "/home/.openinterpreter/memories_1.sqlite")
 assert t + "/proj/cba" in mem.execute("SELECT body FROM memories").fetchone()[0]
-print("openinterpreter: rollout + trust + threads.cwd + memory sweep OK")
+print("openinterpreter: rollout + trust + threads.cwd + project_roots.path + memory sweep OK")
 PY
 /src/target/debug/movara undo --id $(ls $T/home/.movara/backups | tail -1)
 grep -q "$T/proj/abc" $SESS/rollout-x.jsonl
+python3 - <<PY
+import sqlite3, os
+t = os.environ.get("T", "/tmp/verify")
+con = sqlite3.connect(t + "/home/.openinterpreter/state_5.sqlite")
+assert con.execute("SELECT cwd FROM threads").fetchone()[0] == t + "/proj/abc"
+assert con.execute("SELECT path FROM project_roots").fetchone()[0] == t + "/proj/abc"
+print("openinterpreter: undo restored state db OK")
+PY
 echo "openinterpreter: undo restored OK"
 EOF
 

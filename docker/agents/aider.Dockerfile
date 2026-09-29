@@ -3,7 +3,7 @@
 FROM rust:1.98-slim-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 python3-pip \
+    && apt-get install -y --no-install-recommends git curl pkg-config libsqlite3-dev ca-certificates python3 python3-pip python3-setuptools python3-wheel build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --break-system-packages aider-chat && aider --version

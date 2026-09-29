@@ -22,15 +22,26 @@ mkdir -p $CONV $T/proj/abc
 printf '[chat]\nname = "verif"\nworkspace = "%s/proj/abc"\n' "$T" > $CONV/config.toml
 printf '{"role": "user", "content": "hi"}\n' > $CONV/conversation.jsonl
 ln -s $T/proj/abc $CONV/workspace
+# ACP surface: logs/acp-<sha256(resolved cwd)[:8]>/ is path-derived and
+# renames with the move
+A=acp-$(python3 -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:8])" "$T/proj/abc")
+AN=acp-$(python3 -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:8])" "$T/proj/cba")
+ACONV=$T/home/.local/share/gptme/logs/$A
+mkdir -p $ACONV
+printf '{"role": "user", "content": "acp"}\n' > $ACONV/conversation.jsonl
 export MOVARA_HOME=$T/home
 /src/target/debug/movara migrate --from $T/proj/abc --to $T/proj/cba --agents gptme --yes
 grep -q "$T/proj/cba" $CONV/config.toml
 [ "$(readlink $CONV/workspace)" = "$T/proj/cba" ]
 echo "gptme: workspace + symlink rekeyed OK"
+[ -d $T/home/.local/share/gptme/logs/$AN ] && [ ! -d $ACONV ]
+echo "gptme: acp session dir rekeyed OK"
 /src/target/debug/movara undo --id $(ls $T/home/.movara/backups | tail -1)
 grep -q "$T/proj/abc" $CONV/config.toml
 [ "$(readlink $CONV/workspace)" = "$T/proj/abc" ]
 echo "gptme: undo restored OK"
+[ -d $ACONV ]
+echo "gptme: undo restored acp dir OK"
 EOF
 
 CMD ["echo", "gptme adapter verification passed"]
