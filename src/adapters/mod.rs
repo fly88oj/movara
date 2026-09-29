@@ -527,6 +527,18 @@ impl Adapter for ClaudeAdapter {
                 &format!("-> {}", n.display()),
             ));
         }
+        // session-data/<date>.tmp files carry the session's Worktree
+        // header in plain text — identity metadata, never chat content,
+        // but the extension dispatch would skip the unknown .tmp suffix
+        // (scan already reports these files; keep migrate symmetric)
+        let sd = ctx.h(".claude/session-data");
+        if sd.is_dir() {
+            for f in iter_files(&[sd], None) {
+                if rewriters::rewrite_text_file(&f, spec, backup)? {
+                    actions.push(mk(self.name(), "file", &f, "session-data"));
+                }
+            }
+        }
         actions.extend(self.migrate_text_tree(spec, backup, &extra_roots(ctx), deep)?);
         Ok(actions)
     }

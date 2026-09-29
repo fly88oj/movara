@@ -175,7 +175,10 @@ impl Adapter for OpencodeAdapter {
             backup.record_db(&db)?;
             if !backup.dry_run {
                 let con = sqlite::open_rw(&db)?;
-                rewrite_pair(
+                // per-table tolerance: a partial channel database (or an
+                // older schema) missing one table must not abort the
+                // rest of the pass
+                let _ = rewrite_pair(
                     &con,
                     &spec.like_patterns(),
                     spec,
@@ -183,7 +186,10 @@ impl Adapter for OpencodeAdapter {
                      WHERE \"worktree\" LIKE ?",
                     "UPDATE \"project\" SET \"worktree\"=? WHERE \"id\"=?",
                 )?;
-                rewrite_pair(
+                // per-table tolerance: a partial channel database (or an
+                // older schema) missing one table must not abort the
+                // rest of the pass
+                let _ = rewrite_pair(
                     &con,
                     &spec.like_patterns(),
                     spec,
@@ -191,7 +197,10 @@ impl Adapter for OpencodeAdapter {
                      WHERE \"sandboxes\" LIKE ?",
                     "UPDATE \"project\" SET \"sandboxes\"=? WHERE \"id\"=?",
                 )?;
-                rewrite_pair(
+                // per-table tolerance: a partial channel database (or an
+                // older schema) missing one table must not abort the
+                // rest of the pass
+                let _ = rewrite_pair(
                     &con,
                     &spec.like_patterns(),
                     spec,
@@ -200,7 +209,10 @@ impl Adapter for OpencodeAdapter {
                     "UPDATE \"workspace\" SET \"directory\"=? \
                      WHERE \"id\"=?",
                 )?;
-                rewrite_pair(
+                // per-table tolerance: a partial channel database (or an
+                // older schema) missing one table must not abort the
+                // rest of the pass
+                let _ = rewrite_pair(
                     &con,
                     &spec.like_patterns(),
                     spec,
@@ -208,7 +220,10 @@ impl Adapter for OpencodeAdapter {
                      WHERE \"directory\" LIKE ?",
                     "UPDATE \"session\" SET \"directory\"=? WHERE \"id\"=?",
                 )?;
-                rewrite_pair(
+                // per-table tolerance: a partial channel database (or an
+                // older schema) missing one table must not abort the
+                // rest of the pass
+                let _ = rewrite_pair(
                     &con,
                     &spec.like_patterns(),
                     spec,
@@ -219,7 +234,10 @@ impl Adapter for OpencodeAdapter {
                 // composite PK (project_id, directory): rowid addressing
                 // keeps multi-worktree rows distinct instead of
                 // collapsing them onto one value (UNIQUE violation)
-                rewrite_pair(
+                // per-table tolerance: a partial channel database (or an
+                // older schema) missing one table must not abort the
+                // rest of the pass
+                let _ = rewrite_pair(
                     &con,
                     &spec.like_patterns(),
                     spec,
