@@ -279,8 +279,15 @@ pub fn undo(backup_dir: &Path, backup_id: &str) -> Result<bool> {
     }
     let to_original = |p: &str| -> String {
         let mut best: Option<(&String, &String)> = None;
+        // separators must not leak into the comparison: rel literals
+        // like ".cc-connect/sessions" join into MIXED-separator paths
+        // on Windows while recorded file paths are pure-native — a
+        // mismatch here resurrects renamed files at their new names
+        let norm = |s: &str| s.replace('\\', "/");
+        let p_norm = norm(p);
         for (old, new) in &manifest.renames {
-            if (p == new || p.starts_with(&format!("{}{}", new, std::path::MAIN_SEPARATOR)))
+            let new_norm = norm(new);
+            if (p_norm == new_norm || p_norm.starts_with(&format!("{}/", new_norm)))
                 && best
                     .as_ref()
                     .map(|(_, bn)| new.len() > bn.len())

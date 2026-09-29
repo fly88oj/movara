@@ -231,11 +231,15 @@ impl Adapter for GeminiAdapter {
 }
 
 fn identity_roots(ctx: &Ctx) -> Vec<PathBuf> {
-    [".gemini/projects.json", ".gemini/settings.json"]
-        .iter()
-        .map(|rel| ctx.h(rel))
-        .filter(|p| p.exists())
-        .collect()
+    [
+        ".gemini/projects.json",
+        ".gemini/settings.json",
+        ".gemini/trustedFolders.json",
+    ]
+    .iter()
+    .map(|rel| ctx.h(rel))
+    .filter(|p| p.exists())
+    .collect()
 }
 
 fn chat_roots(ctx: &Ctx) -> Vec<PathBuf> {
@@ -297,10 +301,13 @@ macro_rules! fork_impl {
             }
 
             fn hash_dirs(&self, ctx: &Ctx) -> Vec<PathBuf> {
+                // qwen also keys ~/.qwen/audits by sha256(cwd) (upstream
+                // hashes the realpath there; identical whenever the
+                // project path carries no symlinks)
                 let rels: &[&str] = if self.cfg().is_iflow {
                     &["tmp", "history", "cache", "snapshots"]
                 } else {
-                    &["tmp"]
+                    &["tmp", "audits"]
                 };
                 rels.iter()
                     .map(|r| ctx.h(&format!("{}/{}", self.cfg().state_rel, r)))

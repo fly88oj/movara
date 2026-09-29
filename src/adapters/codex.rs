@@ -91,6 +91,19 @@ impl Adapter for CodexAdapter {
                         detail: format!("{} rows", n),
                     });
                 }
+                let n = super::sqlite_like_count(
+                    &con,
+                    "SELECT rowid FROM \"project_roots\" WHERE \"path\" LIKE ?",
+                    &spec.like_pattern(),
+                );
+                if n > 0 {
+                    out.push(Finding {
+                        agent: self.name().into(),
+                        kind: "sqlite".into(),
+                        target: format!("{}::project_roots.path", db.display()),
+                        detail: format!("{} rows", n),
+                    });
+                }
             }
         }
         out
@@ -123,37 +136,63 @@ impl Adapter for CodexAdapter {
             }
         }
         for db in self.state_dbs(ctx) {
-            let n = sqlite::open_ro(&db)
+            let (n_threads, n_roots) = sqlite::open_ro(&db)
                 .ok()
                 .map(|con| {
-                    super::sqlite_like_count(
-                        &con,
-                        "SELECT \"id\" FROM \"threads\" \
-                         WHERE \"cwd\" LIKE ?",
-                        &spec.like_pattern(),
+                    (
+                        super::sqlite_like_count(
+                            &con,
+                            "SELECT \"id\" FROM \"threads\" \
+                             WHERE \"cwd\" LIKE ?",
+                            &spec.like_pattern(),
+                        ),
+                        // migration 0049: project_roots.path is the
+                        // project-grouping identity in the state DBs
+                        super::sqlite_like_count(
+                            &con,
+                            "SELECT rowid FROM \"project_roots\" \
+                             WHERE \"path\" LIKE ?",
+                            &spec.like_pattern(),
+                        ),
                     )
                 })
-                .unwrap_or(0);
-            if n == 0 {
+                .unwrap_or((0, 0));
+            if n_threads == 0 && n_roots == 0 {
                 continue;
             }
             backup.record_db(&db)?;
             if !backup.dry_run {
                 let con = sqlite::open_rw(&db)?;
-                super::rewrite_pair(
-                    &con,
-                    &spec.like_patterns(),
-                    spec,
-                    "SELECT \"id\",\"cwd\" FROM \"threads\" \
-                     WHERE \"cwd\" LIKE ?",
-                    "UPDATE \"threads\" SET \"cwd\"=? WHERE \"id\"=?",
-                )?;
+                if n_threads > 0 {
+                    super::rewrite_pair(
+                        &con,
+                        &spec.like_patterns(),
+                        spec,
+                        "SELECT \"id\",\"cwd\" FROM \"threads\" \
+                         WHERE \"cwd\" LIKE ?",
+                        "UPDATE \"threads\" SET \"cwd\"=? WHERE \"id\"=?",
+                    )?;
+                }
+                if n_roots > 0 {
+                    super::rewrite_pair(
+                        &con,
+                        &spec.like_patterns(),
+                        spec,
+                        "SELECT rowid,\"path\" FROM \"project_roots\" \
+                         WHERE \"path\" LIKE ?",
+                        "UPDATE \"project_roots\" SET \"path\"=? \
+                         WHERE rowid=?",
+                    )?;
+                }
             }
             actions.push(Finding {
                 agent: self.name().into(),
                 kind: "sqlite".into(),
                 target: format!("{}::threads", db.display()),
-                detail: format!("{} rows updated (cwd)", n),
+                detail: format!(
+                    "{} rows updated (cwd) + {} project_roots",
+                    n_threads, n_roots
+                ),
             });
         }
         Ok(actions)

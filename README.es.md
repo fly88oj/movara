@@ -202,7 +202,7 @@ Un `move` entre hosts añade el árbol del proyecto (con `.git`) al intercambio:
 | Factory Droid | `~/.factory/sessions/<encoded>/` | realpath, solo barras |
 | Continue | `~/.continue/sessions/*.json`, index.sqlite | URI file:// + tag_catalog.dir |
 | pi / gsd | `~/.pi/agent/sessions/--<enc>--/` | bucket `--encoded--` + `cwd` |
-| Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
+| Zed | `~/.local/share/zed/threads/threads.db`, `db/0-*/db.sqlite` | folder_paths + workspaces/toolchains/trusted paths |
 | Aider | `~/.aider.conf.yml` | rutas absolutas en la configuración |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | MRU de directorios + hash en el nombre de archivo |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | buckets `wd_<basename>_<sha256[:12]>` (dirs+archivos) + workDir |

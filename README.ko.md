@@ -175,7 +175,7 @@ movara undo --id 20260903-131427-644777
 | Factory Droid | `~/.factory/sessions/<encoded>/` | realpath, 슬래시만 치환 |
 | Continue | `~/.continue/sessions/*.json`, index.sqlite | file:// URI + tag_catalog.dir |
 | pi / gsd | `~/.pi/agent/sessions/--<enc>--/` | `--encoded--` 버킷 + `cwd` |
-| Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
+| Zed | `~/.local/share/zed/threads/threads.db`, `db/0-*/db.sqlite` | folder_paths + workspaces/toolchains/trusted paths |
 | Aider | `~/.aider.conf.yml` | 설정 안의 절대 경로 |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | 디렉터리 MRU + 파일명 해시 |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` 버킷 디렉터리+파일 + workDir |
@@ -186,7 +186,7 @@ movara undo --id 20260903-131427-644777
 | gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace`(틸드 형식 포함) + `workspace` 심볼릭 링크 + `files` 목록 |
 | Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<account>/projects/<dash>/` |
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
-| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills 정의 |
+| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills + session-state/ + session-store.db |
 | Warp | `~/.local/share/warp/warp.db` | 범용 텍스트 열 스윕(폐쇄 스키마) |
 | Open Interpreter | `~/.openinterpreter/` | sessions 롤아웃 `payload.cwd`, `config.toml [projects]`, `state_*.sqlite threads.cwd` |
 

@@ -185,14 +185,19 @@ impl ReplaceSpec {
         format!("%{}%", self.old)
     }
 
-    /// LIKE pre-filter patterns matching BOTH the raw and the
-    /// JSON-escaped form (Windows paths stored in JSON columns carry
-    /// doubled backslashes; the single-pattern form misses them). Use
-    /// with `LIKE ? OR LIKE ?` call sites.
+    /// LIKE pre-filter patterns matching the raw, the JSON-escaped and
+    /// the forward-slash forms (Windows paths in JSON columns carry
+    /// doubled backslashes; opencode and friends normalize their sqlite
+    /// path columns to forward slashes). Use with `LIKE ? OR LIKE ?`
+    /// call sites.
     pub fn like_patterns(&self) -> Vec<String> {
         let raw = format!("%{}%", self.old);
         if self.old.contains('\\') {
-            vec![raw, format!("%{}%", self.old.replace('\\', "\\\\"))]
+            vec![
+                raw,
+                format!("%{}%", self.old.replace('\\', "\\\\")),
+                format!("%{}%", self.old.replace('\\', "/")),
+            ]
         } else {
             vec![raw]
         }

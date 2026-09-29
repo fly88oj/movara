@@ -178,7 +178,7 @@ Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den A
 | Factory Droid | `~/.factory/sessions/<encoded>/` | realpath, nur Schrägstriche |
 | Continue | `~/.continue/sessions/*.json`, index.sqlite | file://-URI + tag_catalog.dir |
 | pi / gsd | `~/.pi/agent/sessions/--<enc>--/` | `--encoded--`-Bucket + `cwd` |
-| Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
+| Zed | `~/.local/share/zed/threads/threads.db`, `db/0-*/db.sqlite` | folder_paths + workspaces/toolchains/trusted paths |
 | Aider | `~/.aider.conf.yml` | absolute Pfade in der Konfiguration |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | Verzeichnis-MRU + Dateinamen-Hash |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` Buckets (Verz.+Dateien) + workDir |
@@ -189,7 +189,7 @@ Ein `move` über Hosts hinweg bringt den Projektbaum (inkl. `.git`) mit in den A
 | gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (auch Tilde-Form) + `workspace`-Symlink + `files`-Listen |
 | Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<Konto>/projects/<dash>/` |
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
-| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills-Definitionen |
+| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills + session-state/ + session-store.db |
 | Warp | `~/.local/share/warp/warp.db` | generisches Text-Spalten-Sweep (geschlossenes Schema) |
 | Open Interpreter | `~/.openinterpreter/` | Rollout `payload.cwd`, `config.toml [projects]`, `state_*.sqlite threads.cwd` |
 

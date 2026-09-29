@@ -39,17 +39,22 @@ const JSON_FIELD_KEYS: &[&str] = &[
     "data_dir",
     "workDir",
     "work_dir",
+    "gitRoot",
+    "acp_session_cwd",
+    "work_dir_override",
 ];
 
 /// fields whose value is a LIST of paths (e.g. codex workspace_roots)
 pub const JSON_LIST_FIELD_KEYS: &[&str] = &[
     "workspace_roots",
+    "runtime_workspace_roots",
     "workspaceFolders",
     "folders",
     "roots",
     "workspace_folders",
     "files",
     "recentProjects",
+    "trustedFolders",
 ];
 
 /// keep only the identity-ish top-level fields of a JSON value (archive

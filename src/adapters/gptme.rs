@@ -17,7 +17,9 @@
 //!     (binary payloads; the hash is over CONTENT, not paths)
 //!   - `.lock`, `*.toml.tmp` — runtime files, skipped
 //!
-//! No path-derived directory names — no bucket renames anywhere.
+//! CLI conversation names are never path-derived; the exception is the
+//! ACP surface: `logs/acp-<sha256(resolved cwd)[:8]>/` (Zed and other
+//! ACP clients) IS path-derived and renames with the move.
 
 use super::{mk, Adapter, Finding};
 use crate::backup::Backup;
@@ -168,18 +170,23 @@ impl Adapter for GptmeAdapter {
         // so this is a direct boundary-aware string replacement
         let home = ctx.home.to_string_lossy().into_owned();
         if spec.old.starts_with(&home) && spec.new.starts_with(&home) {
-            // gptme writes the tilde suffix with forward slashes on
-            // every OS; the path under comparison may carry backslashes
-            let suffix = |p: &str| p[home.len()..].replace('\\', "/");
+            // gptme's tilde suffix rides the OS-native separators
+            // verbatim (Windows writes `~\works\p`); try the native form
+            // first and the forward-slash variant second
+            let suffix = |p: &str| p[home.len()..].to_string();
             let t_old = format!("~{}", suffix(&spec.old));
             let t_new = format!("~{}", suffix(&spec.new));
+            let t_old_fwd = t_old.replace('\\', "/");
+            let t_new_fwd = t_new.replace('\\', "/");
             for conv in self.conv_dirs(ctx) {
                 let cfg = conv.join("config.toml");
                 if !cfg.is_file() {
                     continue;
                 }
                 if let Ok(raw) = std::fs::read_to_string(&cfg) {
-                    if let Some(new_text) = boundary_replace(&raw, &t_old, &t_new) {
+                    let replaced = boundary_replace(&raw, &t_old, &t_new)
+                        .or_else(|| boundary_replace(&raw, &t_old_fwd, &t_new_fwd));
+                    if let Some(new_text) = replaced {
                         if !backup.dry_run {
                             backup.record_file(&cfg)?;
                             crate::rewriters::write_atomic(&cfg, new_text.as_bytes())?;
@@ -187,6 +194,22 @@ impl Adapter for GptmeAdapter {
                         actions.push(mk(self.name(), "file", &cfg, "workspace (tilde)"));
                     }
                 }
+            }
+        }
+        // ACP sessions (Zed and other clients) live in
+        // logs/acp-<sha256(resolved cwd)[:8]>/ — a path-derived name
+        let acp_old = format!("acp-{}", crate::encodings::sha256_8(&spec.old));
+        let acp_new = format!("acp-{}", crate::encodings::sha256_8(&spec.new));
+        if acp_old != acp_new {
+            let old_d = self.root(ctx).join(&acp_old);
+            let new_d = self.root(ctx).join(&acp_new);
+            if super::rename_dir(&old_d, &new_d, backup) {
+                actions.push(mk(
+                    self.name(),
+                    "dir_rename",
+                    &old_d,
+                    &format!("-> {}", new_d.display()),
+                ));
             }
         }
         for conv in self.conv_dirs(ctx) {

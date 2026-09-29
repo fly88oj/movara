@@ -47,13 +47,14 @@ fn encodings_match_reference_values() {
         "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
     );
     assert_eq!(encodings::md5_hex("x"), "9dd4e461268c8034f5c8564e155c67a6");
-    // omp: home-relative bucket, no home prefix
+    // omp: home-relative bucket keeps '_' (only / \ : map to '-');
+    // home itself is "-"; outside home the legacy --…-- form
     assert_eq!(
-        encodings::omp_bucket("/home/u/works/x", "/home/u"),
-        "-works-x"
+        encodings::omp_bucket("/home/u/works/my_repo", "/home/u"),
+        "-works-my_repo"
     );
-    assert_eq!(encodings::omp_bucket("/home/u", "/home/u"), "-home");
-    assert_eq!(encodings::omp_bucket("/srv/x", "/home/u"), "-srv-x");
+    assert_eq!(encodings::omp_bucket("/home/u", "/home/u"), "-");
+    assert_eq!(encodings::omp_bucket("/srv/x", "/home/u"), "--srv-x--");
     // pi: --encoded--
     assert_eq!(encodings::pi_bucket("/home/u/x"), "--home-u-x--");
     // droid: only slashes become dashes
@@ -103,7 +104,13 @@ fn no_old_references_left_after_full_migration() {
             || name.ends_with("opencode/opencode.db")
             || name.ends_with("run-history.jsonl")
             // goose messages.content_json (chat body in the db)
-            || name.ends_with("sessions/sessions.db");
+            || name.ends_with("sessions/sessions.db")
+            // rewritten sqlite rows leave stale bytes in free pages
+            || name.ends_with("session-store.db")
+            || name.ends_with("0-stable/db.sqlite")
+            || name.ends_with("state_5.sqlite")
+            || name.ends_with("openhands/openhands.db")
+            || name.ends_with(".crush/crush.db");
         assert!(is_content, "unexpected leftover: {}", name);
     }
     // derived sha256 tokens must be gone too
@@ -161,6 +168,24 @@ fn codex_meta_rewritten_content_only_with_deep() {
     let cfg = read(&fx.ctx.h(".codex/config.toml"));
     assert!(cfg.contains(&fx.new));
     assert!(!cfg.contains(&fx.old));
+    let con = rusqlite::Connection::open(fx.ctx.h(".codex/state_5.sqlite")).unwrap();
+    let (cwd, root): (String, String) = con
+        .query_row(
+            "SELECT cwd FROM threads; SELECT path FROM project_roots",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap_or_else(|_| {
+            let cwd: String = con
+                .query_row("SELECT cwd FROM threads", [], |r| r.get(0))
+                .unwrap();
+            let root: String = con
+                .query_row("SELECT path FROM project_roots", [], |r| r.get(0))
+                .unwrap();
+            (cwd, root)
+        });
+    assert_eq!(cwd, fx.new);
+    assert_eq!(root, fx.new);
 }
 
 #[test]
@@ -213,6 +238,25 @@ fn opencode_directory_columns_updated() {
         .query_row("SELECT directory FROM session", [], |r| r.get(0))
         .unwrap();
     assert_eq!(dir, fx.new);
+    // both worktree rows survive the composite-PK rewrite distinctly
+    let mut dirs: Vec<String> = con
+        .prepare("SELECT directory FROM project_directory ORDER BY directory")
+        .unwrap()
+        .query_map([], |r| r.get::<_, String>(0))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    dirs.sort();
+    assert_eq!(dirs, vec![fx.new.clone(), format!("{}/wt2", fx.new)]);
+    // project.sandboxes (JSON abs-path array) follows
+    let sb: String = con
+        .query_row("SELECT sandboxes FROM project WHERE id='pid2'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    let sbv: serde_json::Value = serde_json::from_str(&sb).unwrap();
+    assert_eq!(sbv[0], json!(format!("{}/s1", fx.new)));
+    assert_eq!(sbv[1], json!(format!("{}/s2", fx.new)));
 }
 
 #[test]
@@ -413,6 +457,52 @@ fn zed_folder_paths() {
         .query_row("SELECT folder_paths FROM threads", [], |r| r.get(0))
         .unwrap();
     assert_eq!(fp, fx.new);
+    let con = rusqlite::Connection::open(fx.ctx.d("zed/db/0-stable/db.sqlite")).unwrap();
+    let (sp, tw, ws): (String, String, String) = con
+        .query_row(
+            "SELECT folder_paths FROM sidebar_threads; \
+             SELECT absolute_path FROM trusted_worktrees; \
+             SELECT paths FROM workspaces",
+            [],
+            |r| Ok((r.get(0)?, r.get(0)?, r.get(0)?)),
+        )
+        .unwrap_or_else(|_| {
+            // query_row can't run multi-statements: read one by one
+            let sp: String = con
+                .query_row("SELECT folder_paths FROM sidebar_threads", [], |r| r.get(0))
+                .unwrap();
+            let tw: String = con
+                .query_row(
+                    "SELECT absolute_path FROM trusted_worktrees WHERE trust_id=7",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            let ws: String = con
+                .query_row("SELECT paths FROM workspaces", [], |r| r.get(0))
+                .unwrap();
+            (sp, tw, ws)
+        });
+    assert_eq!(sp, fx.new);
+    assert_eq!(tw, fx.new);
+    assert_eq!(ws, fx.new);
+    let (tc, arc): (String, String) = {
+        let tc: String = con
+            .query_row("SELECT worktree_root_path FROM toolchains", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let arc: String = con
+            .query_row(
+                "SELECT worktree_path FROM archived_git_worktrees",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        (tc, arc)
+    };
+    assert_eq!(tc, fx.new);
+    assert_eq!(arc, fx.new);
 }
 
 #[test]
@@ -427,6 +517,10 @@ fn continue_workspace_directory_and_index() {
         .query_row("SELECT dir FROM tag_catalog", [], |r| r.get(0))
         .unwrap();
     assert_eq!(dir, fx.new);
+    let gc: String = con
+        .query_row("SELECT dir FROM global_cache", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(gc, fx.new);
 }
 
 #[test]
@@ -478,6 +572,13 @@ fn pi_droid_ccconnect_aider_crush() {
                         || n.ends_with("opencode/opencode.db")
                         || n.ends_with("run-history.jsonl")
                         || n.ends_with("sessions/sessions.db")
+                        // rewritten sqlite rows leave stale bytes in free
+                        // pages of the same files
+                        || n.ends_with("session-store.db")
+                        || n.ends_with("0-stable/db.sqlite")
+                        || n.ends_with("state_5.sqlite")
+                        || n.ends_with("openhands/openhands.db")
+                        || n.ends_with(".crush/crush.db")
                 })
     );
     // aider conf
@@ -499,7 +600,30 @@ fn undo_restores_everything() {
     assert!(!fx.grep(&fx.new).is_empty());
     backup::undo(&fx.tmp.join("backups"), &backup.manifest.id).unwrap();
     assert!(!fx.grep(&fx.old).is_empty());
-    assert!(fx.grep(&fx.new).is_empty());
+    let new_leftovers = fx.grep(&fx.new);
+    if !new_leftovers.is_empty() {
+        let m: serde_json::Value = serde_json::from_str(&read(
+            &fx.tmp
+                .join("backups")
+                .join(&backup.manifest.id)
+                .join("manifest.json"),
+        ))
+        .unwrap();
+        let mut cc = Vec::new();
+        for d in [fx.ctx.h(".cc-connect"), fx.ctx.h(".cc-connect/sessions")] {
+            if let Ok(rd) = std::fs::read_dir(&d) {
+                for e in rd.flatten() {
+                    cc.push(e.path().to_string_lossy().into_owned());
+                }
+            }
+        }
+        panic!(
+            "new paths survived undo: {:?} ; renames={:?} ; cc listing={:?}",
+            new_leftovers,
+            m.get("renames").cloned().unwrap_or_default(),
+            cc
+        );
+    }
     assert!(fx
         .ctx
         .h(".claude/projects")
@@ -528,7 +652,30 @@ fn dry_run_changes_nothing() {
     }
     backup.save().unwrap();
     assert!(!fx.grep(&fx.old).is_empty());
-    assert!(fx.grep(&fx.new).is_empty());
+    let new_leftovers = fx.grep(&fx.new);
+    if !new_leftovers.is_empty() {
+        let m: serde_json::Value = serde_json::from_str(&read(
+            &fx.tmp
+                .join("backups")
+                .join(&backup.manifest.id)
+                .join("manifest.json"),
+        ))
+        .unwrap();
+        let mut cc = Vec::new();
+        for d in [fx.ctx.h(".cc-connect"), fx.ctx.h(".cc-connect/sessions")] {
+            if let Ok(rd) = std::fs::read_dir(&d) {
+                for e in rd.flatten() {
+                    cc.push(e.path().to_string_lossy().into_owned());
+                }
+            }
+        }
+        panic!(
+            "new paths survived undo: {:?} ; renames={:?} ; cc listing={:?}",
+            new_leftovers,
+            m.get("renames").cloned().unwrap_or_default(),
+            cc
+        );
+    }
     assert!(!fx.tmp.join("backups").exists());
 }
 
@@ -580,6 +727,12 @@ fn kimi_buckets_files_and_index_all_move() {
                 || n.ends_with("opencode/opencode.db")
                 || n.ends_with("run-history.jsonl")
                 || n.ends_with("sessions/sessions.db")
+                // rewritten sqlite rows leave stale bytes in free pages
+                || n.ends_with("session-store.db")
+                || n.ends_with("0-stable/db.sqlite")
+                || n.ends_with("state_5.sqlite")
+                || n.ends_with("openhands/openhands.db")
+                || n.ends_with(".crush/crush.db")
         }),
         "unexpected leftover: {:?}",
         fx.grep(&fx.old)
@@ -830,6 +983,14 @@ fn openhands_project_buckets_and_working_dir_move() {
     let settings: serde_json::Value =
         serde_json::from_str(&read(&root.join("agent_settings.json"))).unwrap();
     assert_eq!(settings["working_dir"], json!(fx.new));
+    let con = rusqlite::Connection::open(root.join("openhands.db")).unwrap();
+    let tags: String = con
+        .query_row("SELECT tags FROM conversation_metadata", [], |r| r.get(0))
+        .unwrap();
+    // Windows stores the path JSON-escaped inside the tags value
+    let tags_n = norm_forms(&tags);
+    assert!(!tags_n.contains(&norm_forms(&fx.old)));
+    assert!(tags_n.contains(&norm_forms(&fx.new)));
 }
 
 #[test]
@@ -866,6 +1027,14 @@ fn gptme_workspace_config_files_lists_and_symlink_move() {
         let t = std::fs::read_link(conv.join("workspace")).unwrap();
         assert_eq!(t, std::path::PathBuf::from(&fx.new));
     }
+    // the ACP session dir renames with the path-derived hash
+    let logs = fx.ctx.d("gptme/logs");
+    assert!(logs
+        .join(format!("acp-{}", encodings::sha256_8(&fx.new)))
+        .is_dir());
+    assert!(!logs
+        .join(format!("acp-{}", encodings::sha256_8(&fx.old)))
+        .exists());
 }
 
 #[test]
@@ -969,6 +1138,24 @@ fn copilot_definitions_move() {
     let a: serde_json::Value =
         serde_json::from_str(&read(&fx.ctx.h(".copilot/agents/review.json"))).unwrap();
     assert_eq!(a["cwd"], json!(fx.new));
+    let con = rusqlite::Connection::open(fx.ctx.h(".copilot/session-store.db")).unwrap();
+    let cwd: String = con
+        .query_row("SELECT cwd FROM sessions", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(cwd, fx.new);
+    let fp: String = con
+        .query_row("SELECT file_path FROM session_files", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(fp, format!("{}/main.rs", fx.new));
+    let gr: String = con
+        .query_row("SELECT git_root_path FROM forge_skill_proposals", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(gr, fx.new);
+    let ev = json_val(&read(&fx.ctx.h(".copilot/session-state/s1/events.jsonl")));
+    assert_eq!(ev["cwd"], json!(fx.new));
+    assert_eq!(ev["gitRoot"], json!(fx.new));
 }
 
 #[test]

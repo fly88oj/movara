@@ -8,6 +8,42 @@ official docs (sources per section). Unless marked "unverified", every
 encoding/hash algorithm below was verified bidirectionally against real
 local data. A Chinese version is available at `docs/research.zh-CN.md`.
 
+## 0. Adapter version coverage (source re-verification 2026-09-29)
+
+Every adapter was re-verified against the upstream source at the
+versions below (shallow clone / release binary at HEAD unless noted).
+"floor" is the oldest layout the adapter still reads; "source check"
+is the upstream revision the logic was compared against.
+
+| agent | layout floor (adapter reads) | source check (2026-09-29) | notes |
+|---|---|---|---|
+| claude | npm 2.x layouts | @anthropic-ai/claude-code 2.1.284 binary + live state | >200-char encoded buckets truncate with an incompressible base36 suffix — unreproducible, documented limitation |
+| codex | 0.122 jsonl; 0.147+ state DBs | openai/codex HEAD 2026-09 (0.153.x era) | project_roots.path (migration 0049) now covered; runtime_workspace_roots list key |
+| gemini | v0.3x tmp/<slug> layouts | google-gemini/gemini-cli fe63502 (v0.44.0) | trustedFolders.json added |
+| qwen | 0.2x | QwenLM/qwen-code 2f5a62e (0.22.0) | audits/<sha256(cwd)> dir added |
+| iflow | 0.5.x final | closed; live-verified 0.5.17 (EOL 2026-04-17) | adapter frozen |
+| opencode | JSON storage/ era + sqlite from 2026-02 | anomalyco/opencode 7945de2 (1.18.x era) | channel DB names, project.sandboxes, composite-PK rowid rewrite, forward-slash columns |
+| omp | 17.x hashed + 18.x buckets | can1357/oh-my-pi d1932a6 (18.4.3) | bucket encoding re-derived from upstream (3-branch); XDG/memories/agent.db gaps remain — see limitations |
+| zcode | 3.10.2 state dirs | zai-org/ZCode v3.14.3 (open source 2026-09-21) | project identity + desktop v2 surfaces; live dry-run verified |
+| cursor / windsurf / antigravity | closed | live machine layouts (state.vscdb family) | no source available |
+| crush | per-project crush.db era | charmbracelet/crush HEAD (v0.89+) | project db files/read_files columns + Windows LOCALAPPDATA root |
+| droid | factory layouts | closed | live-verified |
+| continue | sessions/*.json + index sqlite | continuedev/continue HEAD | index.v1.sqlite variant watch item |
+| pi | --encoded-- buckets | earendil-works b485fa3 + npm 0.87.1 | '?' mapping kept for NTFS safety |
+| aider | 0.8x | Aider-AI/aider 5dc9490 (frozen 2026-05) | whole-file config rewrite is version-immune |
+| cc-connect | v1.x | chenhg5/cc-connect dfad194 | projects/crons/timers/config + legacy root hash files |
+| zed | threads.db + db/0-* | zed-industries/zed HEAD 2026-09 | trust_id PK, workspaces/toolchains/archived tables, channel globs |
+| kimi | ~/.kimi + ~/.kimi-code | closed; live-verified 2.0/2.1 | official data-locations docs |
+| goose | legacy *.jsonl + sessions.db (v1.10+) | block/goose HEAD (v1.49.0) | GOOSE_PATH_ROOT env not followed (documented) |
+| cline / roo / kilo (extensions) | classic task layouts | cline/cline, RooCodeInc/Roo-Code, KiloCode/kilo-code HEAD | cwdHash/sha256 buckets verified; Cline CLI (~/.cline) is a separate v1.4 target |
+| openhands | V0 conversations/ | OpenHands-CLI 954f2ba (V0, unmaintained) + sandbox-server 4abe6a4 | V1 openhands.db tags pass added; acp_session_cwd key |
+| codebuff | manicode layouts | CodebuffAI/codebuff 5be2c73 | byok moved to ~/.config/freebuff (comment fix) |
+| gptme | v0.3x logs | gptme/gptme d149636a (v0.34.0) | ACP acp-<sha256[:8]> dirs rename; Windows tilde needle native-form |
+| qoder / lingma / trae | 2026-09 containers | qoder CLI live, trae IDE live; TRAE-agent e839e55 snapshot | ~/.trae-agent/ckg is a small v1.4 target |
+| copilot | GA Feb 2026 definitions | github/copilot-cli v1.0.89 release binary | session-state/ + session-store.db (chronicle) covered; /chronicle reindex hint |
+| warp | warp.db generic sweep | closed | synthetic-verified only (no live sample) |
+| openinterpreter | rust rebase (0.0.x) | openinterpreter/openinterpreter HEAD 2026-09-27 | threads + project_roots additive passes |
+
 ## 1. Agents keyed by encoded directory names
 
 ### Claude Code

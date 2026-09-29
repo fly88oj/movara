@@ -24,6 +24,7 @@ impl ContinueAdapter {
     fn roots(&self, ctx: &Ctx) -> Vec<PathBuf> {
         [
             ".continue/sessions",
+            ".continue/index/globalContext.json",
             ".continue/config.yaml",
             ".continue/config.json",
         ]
@@ -64,12 +65,16 @@ impl Adapter for ContinueAdapter {
                     "SELECT \"dir\" FROM \"tag_catalog\" \
                      WHERE \"dir\" LIKE ?",
                     &spec.like_pattern(),
+                ) + super::sqlite_like_count(
+                    &con,
+                    "SELECT rowid FROM \"global_cache\" WHERE \"dir\" LIKE ?",
+                    &spec.like_pattern(),
                 );
                 if n > 0 {
                     out.push(Finding {
                         agent: self.name().into(),
                         kind: "sqlite".into(),
-                        target: format!("{}::tag_catalog.dir", db.display()),
+                        target: format!("{}::tag_catalog/global_cache.dir", db.display()),
                         detail: format!("{} rows", n),
                     });
                 }
@@ -115,6 +120,16 @@ impl Adapter for ContinueAdapter {
                     }
                 }
                 if total > 0 {
+                    // global_cache.dir mirrors tag_catalog.dir (the
+                    // same workspace URIs)
+                    let _ = super::rewrite_pair(
+                        &con,
+                        &spec.like_patterns(),
+                        spec,
+                        "SELECT rowid,\"dir\" FROM \"global_cache\" \
+                         WHERE \"dir\" LIKE ?",
+                        "UPDATE \"global_cache\" SET \"dir\"=? WHERE rowid=?",
+                    );
                     actions.push(mk(self.name(), "sqlite", &db, "tag_catalog rows updated"));
                 }
             }
@@ -328,10 +343,20 @@ pub struct CrushAdapter;
 
 impl CrushAdapter {
     fn roots(&self, ctx: &Ctx) -> Vec<PathBuf> {
-        [ctx.d("crush"), ctx.c("crush")]
+        // Windows keeps the machine state under LOCALAPPDATA (crush
+        // load.go GlobalConfigData), not the roaming APPDATA dir
+        [ctx.dl("crush"), ctx.d("crush"), ctx.c("crush")]
             .into_iter()
             .filter(|p| p.exists())
             .collect()
+    }
+
+    /// <project>/.crush/crush.db — lives inside the moved project and
+    /// carries absolute paths in files.path (edit version chains) and
+    /// read_files.path
+    fn project_db(&self, spec: &ReplaceSpec) -> Option<PathBuf> {
+        let db = std::path::Path::new(&spec.old).join(".crush/crush.db");
+        db.is_file().then_some(db)
     }
 }
 
@@ -365,7 +390,30 @@ impl Adapter for CrushAdapter {
     }
 
     fn scan(&self, ctx: &Ctx, spec: &ReplaceSpec) -> Vec<Finding> {
-        self.scan_tree(spec, &self.roots(ctx))
+        let mut out = self.scan_tree(spec, &self.roots(ctx));
+        if let Some(db) = self.project_db(spec) {
+            if let Ok(con) = crate::sqlite::open_ro(&db) {
+                let pat = spec.like_pattern();
+                let n = super::sqlite_like_count(
+                    &con,
+                    "SELECT rowid FROM \"files\" WHERE \"path\" LIKE ?",
+                    &pat,
+                ) + super::sqlite_like_count(
+                    &con,
+                    "SELECT rowid FROM \"read_files\" WHERE \"path\" LIKE ?",
+                    &pat,
+                );
+                if n > 0 {
+                    out.push(Finding {
+                        agent: self.name().into(),
+                        kind: "sqlite".into(),
+                        target: format!("{}::files/read_files", db.display()),
+                        detail: format!("{} rows", n),
+                    });
+                }
+            }
+        }
+        out
     }
 
     fn migrate(
@@ -375,7 +423,47 @@ impl Adapter for CrushAdapter {
         backup: &mut Backup,
         deep: bool,
     ) -> Result<Vec<Finding>> {
-        self.migrate_text_tree(spec, backup, &self.roots(ctx), deep)
+        let mut actions = self.migrate_text_tree(spec, backup, &self.roots(ctx), deep)?;
+        if let Some(db) = self.project_db(spec) {
+            let n = crate::sqlite::open_ro(&db)
+                .ok()
+                .map(|con| {
+                    super::sqlite_like_count(
+                        &con,
+                        "SELECT rowid FROM \"files\" WHERE \"path\" LIKE ?",
+                        &spec.like_pattern(),
+                    ) + super::sqlite_like_count(
+                        &con,
+                        "SELECT rowid FROM \"read_files\" WHERE \"path\" LIKE ?",
+                        &spec.like_pattern(),
+                    )
+                })
+                .unwrap_or(0);
+            if n > 0 {
+                backup.record_db(&db)?;
+                if !backup.dry_run {
+                    let con = crate::sqlite::open_rw(&db)?;
+                    super::rewrite_pair(
+                        &con,
+                        &spec.like_patterns(),
+                        spec,
+                        "SELECT rowid,\"path\" FROM \"files\" \
+                         WHERE \"path\" LIKE ?",
+                        "UPDATE \"files\" SET \"path\"=? WHERE rowid=?",
+                    )?;
+                    super::rewrite_pair(
+                        &con,
+                        &spec.like_patterns(),
+                        spec,
+                        "SELECT rowid,\"path\" FROM \"read_files\" \
+                         WHERE \"path\" LIKE ?",
+                        "UPDATE \"read_files\" SET \"path\"=? WHERE rowid=?",
+                    )?;
+                }
+                actions.push(mk(self.name(), "sqlite", &db, "files/read_files paths"));
+            }
+        }
+        Ok(actions)
     }
 }
 
@@ -435,6 +523,25 @@ impl CcConnectAdapter {
     fn sessions(&self, ctx: &Ctx) -> PathBuf {
         ctx.h(".cc-connect/sessions")
     }
+
+    fn root(&self, ctx: &Ctx) -> PathBuf {
+        ctx.h(".cc-connect")
+    }
+
+    /// the whole data dir as one text root: sessions/, projects/
+    /// (work_dir_override state), crons//timers/ job WorkDirs,
+    /// config.toml work_dir/base_dir AND the legacy root-level
+    /// hash-suffixed session files (renamed above, content rewritten
+    /// here). run/ holds runtime sockets and short-lived state with no
+    /// project paths.
+    fn roots(&self, ctx: &Ctx) -> Vec<PathBuf> {
+        let r = self.root(ctx);
+        if r.exists() {
+            vec![r]
+        } else {
+            Vec::new()
+        }
+    }
 }
 
 impl Adapter for CcConnectAdapter {
@@ -458,19 +565,25 @@ impl Adapter for CcConnectAdapter {
     }
 
     fn scan(&self, ctx: &Ctx, spec: &ReplaceSpec) -> Vec<Finding> {
-        let mut out = self.scan_tree(spec, &[self.dir_history(ctx), self.sessions(ctx)]);
+        let mut out = self.scan_tree(spec, &[self.dir_history(ctx)]);
+        out.extend(self.scan_tree(spec, &self.roots(ctx)));
         let old_h = encodings::sha256_8(&spec.old);
-        let sess = self.sessions(ctx);
-        if let Ok(entries) = std::fs::read_dir(&sess) {
-            for e in entries.filter_map(|e| e.ok()) {
-                let name = e.file_name().to_string_lossy().into_owned();
-                if name.contains(&format!("_{}.", old_h)) {
-                    out.push(Finding {
-                        agent: self.name().into(),
-                        kind: "dir_rename".into(),
-                        target: e.path().to_string_lossy().into_owned(),
-                        detail: "hash-suffixed session file".into(),
-                    });
+        // hash-suffixed session files live in sessions/ AND (legacy
+        // layouts) directly in the data dir
+        for dir in [self.sessions(ctx), self.root(ctx)] {
+            if let Ok(entries) = std::fs::read_dir(&dir) {
+                for e in entries.filter_map(|e| e.ok()) {
+                    let name = e.file_name().to_string_lossy().into_owned();
+                    if name.contains(&format!("_{}.", old_h))
+                        || name.contains(&format!("_{}.sessions.", old_h))
+                    {
+                        out.push(Finding {
+                            agent: self.name().into(),
+                            kind: "dir_rename".into(),
+                            target: e.path().to_string_lossy().into_owned(),
+                            detail: "hash-suffixed session file".into(),
+                        });
+                    }
                 }
             }
         }
@@ -494,36 +607,41 @@ impl Adapter for CcConnectAdapter {
             encodings::sha256_8(&spec.new),
         );
         if old_h != new_h {
-            let sess = self.sessions(ctx);
-            if let Ok(entries) = std::fs::read_dir(&sess) {
-                let names: Vec<String> = entries
-                    .filter_map(|e| e.ok())
-                    .map(|e| e.file_name().to_string_lossy().into_owned())
-                    .collect();
-                for name in names {
-                    let tag = format!("_{}.", old_h);
-                    if let Some(idx) = name.find(&tag) {
-                        let old_f = sess.join(&name);
-                        let new_name =
-                            format!("{}_{}{}", &name[..idx], new_h, &name[idx + tag.len() - 1..]);
-                        let new_f = sess.join(new_name);
-                        if old_f.is_file() && !new_f.exists() {
-                            backup.record_rename(&old_f, &new_f);
-                            if !backup.dry_run {
-                                std::fs::rename(&old_f, &new_f)?;
+            for dir in [self.sessions(ctx), self.root(ctx)] {
+                if let Ok(entries) = std::fs::read_dir(&dir) {
+                    let names: Vec<String> = entries
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .collect();
+                    for name in names {
+                        let tag = format!("_{}.", old_h);
+                        if let Some(idx) = name.find(&tag) {
+                            let old_f = dir.join(&name);
+                            let new_name = format!(
+                                "{}_{}{}",
+                                &name[..idx],
+                                new_h,
+                                &name[idx + tag.len() - 1..]
+                            );
+                            let new_f = dir.join(new_name);
+                            if old_f.is_file() && !new_f.exists() {
+                                backup.record_rename(&old_f, &new_f);
+                                if !backup.dry_run {
+                                    std::fs::rename(&old_f, &new_f)?;
+                                }
+                                actions.push(mk(
+                                    self.name(),
+                                    "dir_rename",
+                                    &old_f,
+                                    &format!("-> {}", new_f.display()),
+                                ));
                             }
-                            actions.push(mk(
-                                self.name(),
-                                "dir_rename",
-                                &old_f,
-                                &format!("-> {}", new_f.display()),
-                            ));
                         }
                     }
                 }
             }
         }
-        actions.extend(self.migrate_text_tree(spec, backup, &[self.sessions(ctx)], deep)?);
+        actions.extend(self.migrate_text_tree(spec, backup, &self.roots(ctx), deep)?);
         Ok(actions)
     }
 }

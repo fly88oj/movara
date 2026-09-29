@@ -479,6 +479,14 @@ impl Adapter for ClaudeAdapter {
             &encodings::dash_encode(&spec.old),
             &encodings::dash_encode(&spec.new),
         );
+        // teams/<lowercase-encoded-cwd>/ holds per-project shared team
+        // config (a second, lowercased bucket set)
+        out.extend(encoded_bucket_findings(
+            self.name(),
+            &ctx.h(".claude/teams"),
+            &encodings::dash_encode(&spec.old).to_lowercase(),
+            &encodings::dash_encode(&spec.new).to_lowercase(),
+        ));
         out.extend(self.scan_tree(spec, &extra_roots(ctx)));
         out
     }
@@ -505,6 +513,20 @@ impl Adapter for ClaudeAdapter {
                 &format!("-> {}", n.display()),
             ));
         }
+        // teams/<lowercase-encoded-cwd>/ bucket rename
+        for (o, n) in rename_encoded_children(
+            &ctx.h(".claude/teams"),
+            &encodings::dash_encode(&spec.old).to_lowercase(),
+            &encodings::dash_encode(&spec.new).to_lowercase(),
+            backup,
+        ) {
+            actions.push(mk(
+                self.name(),
+                "dir_rename",
+                &o,
+                &format!("-> {}", n.display()),
+            ));
+        }
         actions.extend(self.migrate_text_tree(spec, backup, &extra_roots(ctx), deep)?);
         Ok(actions)
     }
@@ -518,7 +540,9 @@ fn extra_roots(ctx: &Ctx) -> Vec<PathBuf> {
         ".claude/file-history",
         ".claude/shell-snapshots",
         ".claude/sessions",
+        ".claude/session-data",
         ".claude/agents",
+        ".claude/teams",
         ".claude/projects",
     ]
     .iter()

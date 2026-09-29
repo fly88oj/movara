@@ -181,7 +181,7 @@ movara undo --id 20260903-131427-644777
 | Factory Droid | `~/.factory/sessions/<encoded>/` | realpath |
 | Continue | `~/.continue/sessions/*.json`、index.sqlite | file:// URI |
 | pi / gsd | `~/.pi/agent/sessions/--<enc>--/` | `--encoded--` 桶 + `cwd` |
-| Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
+| Zed | `~/.local/share/zed/threads/threads.db`, `db/0-*/db.sqlite` | folder_paths + workspaces/toolchains/trusted paths |
 | Aider | `~/.aider.conf.yml` | 配置内绝对路径 |
 | cc-connect | `~/.cc-connect/dir_history.json` | 目录 MRU + 文件名哈希 |
 | Kimi Code | `~/.kimi-code/` workspaces.json、session_index.jsonl、sessions/、file-history/、workspace-trust/ | `wd_<basename>_<sha256[:12]>` 桶目录+文件 + workDir |
@@ -192,7 +192,7 @@ movara undo --id 20260903-131427-644777
 | gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace`（含波浪号形态）+ `workspace` 符号链接 + `files` 列表 |
 | Qoder / 灵码（CN） | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<账户>/projects/<dash>/` |
 | Trae（字节） | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
-| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills 定义 |
+| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills 定义层 + session-state/ + session-store.db 索引 |
 | Warp | `~/.local/share/warp/warp.db` | 通用文本列扫描（闭源 schema） |
 | Open Interpreter | `~/.openinterpreter/` | sessions rollout `payload.cwd`、`config.toml [projects]`、`state_*.sqlite threads.cwd` |
 

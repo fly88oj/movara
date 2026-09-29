@@ -239,6 +239,40 @@ impl Fixture {
             ".copilot/skills/notes.md",
             "# notes\nsome agent skill documentation\n",
         );
+        let db = self.ctx.h(".copilot/session-store.db");
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch(
+            "CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT, \
+             repository TEXT);\
+             CREATE TABLE session_files (session_id TEXT, file_path TEXT, \
+             tool_name TEXT);\
+             CREATE TABLE forge_skill_proposals (id TEXT PRIMARY KEY, \
+             repo_owner TEXT, repo_name TEXT, git_root_path TEXT);",
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO sessions VALUES (?,?,?)",
+            rusqlite::params!["s1", self.old, "r"],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO session_files VALUES (?,?,?)",
+            rusqlite::params!["s1", format!("{}/main.rs", self.old), "edit"],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO forge_skill_proposals VALUES (?,?,?,?)",
+            rusqlite::params!["p1", "o", "r", self.old],
+        )
+        .unwrap();
+        self.wj(
+            ".copilot/session-state/s1/events.jsonl",
+            serde_json::json!({
+                "type": "WorkingDirectoryContext",
+                "cwd": self.old,
+                "gitRoot": self.old
+            }),
+        );
     }
 
     /// gptme: ~/.local/share/gptme/logs/<date>-<name>/ with config.toml
@@ -264,6 +298,14 @@ impl Fixture {
         );
         #[cfg(unix)]
         std::os::unix::fs::symlink(&self.old, self.ctx.h(&format!("{conv}/workspace"))).unwrap();
+        let acp = format!("acp-{}", movara::encodings::sha256_8(&self.old));
+        self.w(
+            &format!(".local/share/gptme/logs/{acp}/conversation.jsonl"),
+            &format!(
+                "{}\n",
+                serde_json::json!({"role": "user", "content": "acp"})
+            ),
+        );
     }
 
     /// OpenHands: ~/.openhands conversations/<uuid>/events + base
@@ -286,6 +328,21 @@ impl Fixture {
             &format!(".openhands/projects/{p}/prompt_history.json"),
             serde_json::json!({"prompts": ["hi"]}),
         );
+        let db = self.ctx.h(".openhands/openhands.db");
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch(
+            "CREATE TABLE conversation_metadata (conversation_id TEXT \
+             PRIMARY KEY, tags TEXT);",
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO conversation_metadata VALUES (?,?)",
+            rusqlite::params![
+                "c1",
+                serde_json::json!({"archiveworkspacepath": h}).to_string()
+            ],
+        )
+        .unwrap();
     }
 
     /// Codebuff/Freebuff: ~/.config/manicode/projects/<basename>/
@@ -660,6 +717,24 @@ impl Fixture {
             ".codex/config.toml",
             &format!("[projects.\"{}\"]\ntrust_level = \"trusted\"\n", self.old),
         );
+        let db = self.ctx.h(".codex/state_5.sqlite");
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch(
+            "CREATE TABLE threads (id TEXT PRIMARY KEY, cwd TEXT);\
+             CREATE TABLE project_roots (project_id TEXT, position INTEGER, \
+             path TEXT);",
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO threads VALUES (?,?)",
+            rusqlite::params!["t1", self.old],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO project_roots VALUES (?,?,?)",
+            rusqlite::params!["pr1", 0, self.old],
+        )
+        .unwrap();
     }
 
     fn build_gemini(&self) {
@@ -750,6 +825,26 @@ impl Fixture {
         con.execute(
             "INSERT INTO project_directory VALUES (?,?,?,?,?)",
             rusqlite::params!["pid1", self.old, "folder", "auto", 1],
+        )
+        .unwrap();
+        // a second worktree row: the composite (project_id, directory)
+        // PK must keep the two rows distinct (a CHILD path so the
+        // boundary rules rewrite it)
+        con.execute(
+            "INSERT INTO project_directory VALUES (?,?,?,?,?)",
+            rusqlite::params!["pid1", format!("{}/wt2", self.old), "worktree", "auto", 2],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO project VALUES (?,?,?,?,?)",
+            rusqlite::params![
+                "pid2",
+                format!("{}-sandbox", self.old),
+                "git",
+                serde_json::json!([format!("{}/s1", self.old), format!("{}/s2", self.old)])
+                    .to_string(),
+                "[]"
+            ],
         )
         .unwrap();
         drop(con);
@@ -987,6 +1082,55 @@ impl Fixture {
             rusqlite::params!["t1", "s", self.old, "0"],
         )
         .unwrap();
+        // the db/0-<channel> store carries the workspace-scoped tables
+        let cdb = self.ctx.d("zed/db/0-stable/db.sqlite");
+        fs::create_dir_all(cdb.parent().unwrap()).unwrap();
+        let con = rusqlite::Connection::open(&cdb).unwrap();
+        con.execute_batch(
+            "CREATE TABLE sidebar_threads (thread_id INTEGER PRIMARY KEY, \
+             folder_paths TEXT, main_worktree_paths TEXT);\
+             CREATE TABLE trusted_worktrees (trust_id INTEGER PRIMARY KEY, \
+             absolute_path TEXT, user_name TEXT, host_name TEXT);\
+             CREATE TABLE workspaces (workspace_id INTEGER PRIMARY KEY, \
+             paths TEXT, paths_order TEXT);\
+             CREATE TABLE toolchains (workspace_id INTEGER, \
+             worktree_root_path TEXT, language_name TEXT);\
+             CREATE TABLE user_toolchains (remote_connection_id INTEGER, \
+             workspace_id INTEGER, worktree_root_path TEXT);\
+             CREATE TABLE archived_git_worktrees (id INTEGER PRIMARY KEY, \
+             worktree_path TEXT, main_repo_path TEXT);",
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO sidebar_threads VALUES (?,?,?)",
+            rusqlite::params![1, self.old, self.old],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO trusted_worktrees VALUES (?,?,?,?)",
+            rusqlite::params![7, self.old, "u", "h"],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO workspaces VALUES (?,?,?)",
+            rusqlite::params![1, self.old, "x"],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO toolchains VALUES (?,?,?)",
+            rusqlite::params![1, self.old, "rust"],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO user_toolchains VALUES (?,?,?)",
+            rusqlite::params![1, 1, self.old],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO archived_git_worktrees VALUES (?,?,?)",
+            rusqlite::params![1, self.old, self.old],
+        )
+        .unwrap();
     }
 
     fn build_continue(&self) {
@@ -1004,7 +1148,14 @@ impl Fixture {
         let con = rusqlite::Connection::open(&db).unwrap();
         con.execute_batch(
             "CREATE TABLE tag_catalog (dir TEXT, branch TEXT, \
-             artifactId TEXT, path TEXT, cacheKey TEXT);",
+             artifactId TEXT, path TEXT, cacheKey TEXT);\
+             CREATE TABLE global_cache (id INTEGER PRIMARY KEY \
+             AUTOINCREMENT, dir TEXT);",
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO global_cache (dir) VALUES (?)",
+            rusqlite::params![self.old],
         )
         .unwrap();
         con.execute(
@@ -1047,6 +1198,26 @@ impl Fixture {
     }
 
     fn build_crush(&self) {
+        // project-local .crush/crush.db (edit chains + read history)
+        let db = std::path::Path::new(&self.old).join(".crush/crush.db");
+        fs::create_dir_all(db.parent().unwrap()).unwrap();
+        let con = rusqlite::Connection::open(&db).unwrap();
+        con.execute_batch(
+            "CREATE TABLE files (session_id TEXT, version INTEGER, \
+             path TEXT);\
+             CREATE TABLE read_files (session_id TEXT, path TEXT);",
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO files VALUES (?,?,?)",
+            rusqlite::params!["s1", 1, format!("{}/main.rs", self.old)],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO read_files VALUES (?,?)",
+            rusqlite::params!["s1", format!("{}/lib.rs", self.old)],
+        )
+        .unwrap();
         self.wj(
             ".local/share/crush/projects.json",
             serde_json::json!({
@@ -1075,6 +1246,30 @@ impl Fixture {
         self.wj(
             &format!(".cc-connect/sessions/proj_{}.json", h8),
             serde_json::json!({"workDir": self.old}),
+        );
+        // legacy root-level hash file (pre-sessions/ layouts)
+        self.wj(
+            &format!(".cc-connect/proj_{}.json", h8),
+            serde_json::json!({"workDir": self.old}),
+        );
+        self.wj(
+            ".cc-connect/projects/sandbox.state.json",
+            serde_json::json!({"work_dir_override": self.old}),
+        );
+        self.wj(
+            ".cc-connect/crons/jobs.json",
+            serde_json::json!([{"name": "n", "work_dir": self.old}]),
+        );
+        self.wj(
+            ".cc-connect/timers/jobs.json",
+            serde_json::json!([{"name": "n", "work_dir": self.old}]),
+        );
+        self.w(
+            ".cc-connect/config.toml",
+            &format!(
+                "[[project]]\nname = \"sandbox\"\nwork_dir = \"{}\"\n",
+                self.old
+            ),
         );
     }
 

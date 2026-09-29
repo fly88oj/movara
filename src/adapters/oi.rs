@@ -142,17 +142,27 @@ impl Adapter for OpenInterpreterAdapter {
             actions.push(mk(self.name(), "file", &cfg, "text"));
         }
         for db in self.all_dbs(ctx) {
-            let has_threads = sqlite::open_ro(&db)
+            let (has_threads, has_roots) = sqlite::open_ro(&db)
                 .ok()
                 .map(|con| {
-                    super::sqlite_like_count(
-                        &con,
-                        "SELECT \"id\" FROM \"threads\" WHERE \"cwd\" LIKE ?",
-                        &spec.like_pattern(),
+                    (
+                        super::sqlite_like_count(
+                            &con,
+                            "SELECT \"id\" FROM \"threads\" WHERE \"cwd\" LIKE ?",
+                            &spec.like_pattern(),
+                        ),
+                        // migration 0049 (project_roots.path) lives in the
+                        // state DBs alongside threads — both passes run
+                        super::sqlite_like_count(
+                            &con,
+                            "SELECT rowid FROM \"project_roots\" \
+                             WHERE \"path\" LIKE ?",
+                            &spec.like_pattern(),
+                        ),
                     )
                 })
-                .unwrap_or(0);
-            if has_threads == 0 && !self.db_has_sweep_hits(&db, spec) {
+                .unwrap_or((0, 0));
+            if has_threads == 0 && has_roots == 0 && !self.db_has_sweep_hits(&db, spec) {
                 continue;
             }
             backup.record_db(&db)?;
@@ -170,7 +180,19 @@ impl Adapter for OpenInterpreterAdapter {
                     "UPDATE \"threads\" SET \"cwd\"=? WHERE \"id\"=?",
                 )?;
                 actions.push(mk(self.name(), "db", &db, "threads.cwd"));
-            } else {
+            }
+            if has_roots > 0 {
+                super::rewrite_pair(
+                    &con,
+                    &spec.like_patterns(),
+                    spec,
+                    "SELECT rowid,\"path\" FROM \"project_roots\" \
+                     WHERE \"path\" LIKE ?",
+                    "UPDATE \"project_roots\" SET \"path\"=? WHERE rowid=?",
+                )?;
+                actions.push(mk(self.name(), "db", &db, "project_roots.path"));
+            }
+            if has_threads == 0 && has_roots == 0 {
                 let n = super::sqlite_text_sweep(&con, spec)?;
                 if n > 0 {
                     actions.push(mk(self.name(), "db", &db, &format!("{} rows (sweep)", n)));

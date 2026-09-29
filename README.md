@@ -190,17 +190,17 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | Gemini CLI | `~/.gemini/tmp/<slug>/`, projects.json | sha256(cwd) + slug(basename) |
 | Qwen Code | `~/.qwen/projects/<dash>/`, `~/.qwen/tmp/<sha256>` | dash dir + sha256 + `cwd` |
 | iFlow CLI | `~/.iflow/projects/<fromPath>/`, tmp/history/cache/snapshots `<sha256>` | own encoding + sha256 |
-| OpenCode | `~/.local/share/opencode/opencode.db` | session/project/workspace directory columns |
-| Oh My Pi (omp) | `~/.omp/agent/sessions/<omp-bucket>/`, history.db | home-relative dash bucket + `cwd` |
+| OpenCode | `~/.local/share/opencode/opencode*.db` | project/session/workspace directory + sandboxes columns |
+| Oh My Pi (omp) | `~/.omp/agent/sessions/<omp-bucket>/`, history.db | home-relative bucket (only `/ \ :` dash) + `cwd` |
 | ZCode | `~/.zcode/cli/db/db.sqlite`, memories/, `~/.zcode/v2` | session.directory/path + project_id token, workflow_run/dwf_run cwd, v2 checkpoints/tasks-index |
 | Cursor (IDE+CLI) | `~/.config/Cursor/.../state.vscdb`, `~/.cursor/projects/<dash>/` | fsPath/file:// URIs + composerData |
 | Windsurf | `~/.codeium/windsurf/` + IDE state.vscdb | md5(path) + file:// URIs |
 | Antigravity | `~/.config/Antigravity/.../state.vscdb` + `~/.gemini/antigravity` | same as VS Code forks |
-| Crush | `<project>/.crush/crush.db` + global projects.json | path/data_dir |
+| Crush | `<project>/.crush/crush.db` + global projects.json | path/data_dir + files/read_files columns |
 | Factory Droid | `~/.factory/sessions/<encoded>/` | realpath, slashes only |
 | Continue | `~/.continue/sessions/*.json`, index.sqlite | file:// URI + tag_catalog.dir |
 | pi / gsd | `~/.pi/agent/sessions/--<enc>--/` | `--encoded--` bucket + `cwd` |
-| Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
+| Zed | `~/.local/share/zed/threads/threads.db`, `db/0-*/db.sqlite` | folder_paths + workspaces/toolchains/trusted paths |
 | Aider | `~/.aider.conf.yml` | absolute paths in config |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | dir MRU + filename hash |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | `wd_<basename>_<sha256[:12]>` bucket dirs+files + workDir |
@@ -208,10 +208,10 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | Cline / Roo Code / Kilo Code | `~/.config/<IDE>/User/globalStorage/{claude-dev,roo-code,kilo-code}` | task `path` fields + `workspace`/`cwdOnTaskInitialization` + checkpoints `core.worktree` + cwdHash/sha256 buckets |
 | OpenHands | `~/.openhands/` | `working_dir` + `projects/<sha256(realpath)>/` |
 | Codebuff / Freebuff | `~/.config/manicode/projects/<basename>/` | bare-basename bucket + run-state `cwd` |
-| gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (tilde form too) + `workspace` symlink + `files` lists |
+| gptme | `~/.local/share/gptme/logs/<date>-<name>/` | `config.toml [chat] workspace` (tilde form too) + `workspace` symlink + `files` lists + `acp-<hash8>` dirs |
 | Qoder / Lingma (CN) | `~/.config/Qoder` + `~/.qoder` + `~/.lingma/qoder-cn` | IDE state.vscdb + `memories/<account>/projects/<dash>/` |
 | Trae (ByteDance) | `~/.config/Trae CN` + `~/.trae` | IDE state.vscdb + agents/mcp.json |
-| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills definitions |
+| GitHub Copilot CLI | `~/.copilot` | agents/hooks/skills + session-state/ + session-store.db index |
 | Warp | `~/.local/share/warp/warp.db` | generic text-column sweep (closed schema) |
 | Open Interpreter | `~/.openinterpreter/` | sessions rollout `payload.cwd`, `config.toml [projects]`, `state_*.sqlite threads.cwd` |
 

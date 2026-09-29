@@ -143,19 +143,30 @@ pub fn kimi_bucket(path: &str) -> String {
     format!("wd_{}_{}", basename(path), &sha256_hex(path)[..12])
 }
 
-/// omp sessions bucket: canonicalized cwd, encoded relative to home when
-/// underneath, otherwise the full path; '/' (and any non-alnum) -> '-'.
+/// omp sessions bucket (upstream session-paths.ts getDefaultSessionDirName,
+/// verified against oh-my-pi 18.4.x): realpath the cwd, then —
+/// - home itself -> "-"
+/// - under home -> "-" + rel with ONLY '/' '\' ':' mapped to '-'
+///   (underscores, dots, spaces and unicode ride verbatim)
+/// - under the OS temp dir -> "-tmp-" + rel (same mapping)
+/// - anywhere else -> "--" + path without its leading separator,
+///   same mapping, "--" suffix
 pub fn omp_bucket(path: &str, home: &str) -> String {
     let p = canonical_str(path);
     let h = canonical_str(home);
-    let rel = if p == h {
-        return "-home".to_string();
-    } else if p.starts_with(&format!("{}/", h)) {
-        p[h.len() + 1..].to_string()
-    } else {
-        p.trim_start_matches('/').to_string()
-    };
-    format!("-{}", dash_encode(&rel))
+    let enc = |s: &str| s.replace(['/', '\\', ':'], "-");
+    if p == h {
+        return "-".to_string();
+    }
+    if let Some(rel) = p.strip_prefix(&format!("{}/", h)) {
+        return format!("-{}", enc(rel));
+    }
+    let tmp = canonical_str(&std::env::temp_dir().to_string_lossy());
+    if let Some(rel) = p.strip_prefix(&format!("{}/", tmp)) {
+        return format!("-tmp-{}", enc(rel));
+    }
+    let body = p.strip_prefix('/').unwrap_or(&p);
+    format!("--{}--", enc(body))
 }
 
 /// pi coding agent: sessions/--<encoded-cwd>-- ('/' '\' ':' -> '-')

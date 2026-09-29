@@ -93,6 +93,45 @@ impl Adapter for OpenHandsAdapter {
                 ));
             }
         }
+        // V1 openhands.db: conversation_metadata.tags embeds the
+        // archived workspace path under the 'archiveworkspacepath' key
+        let db = self.root(ctx).join("openhands.db");
+        if db.is_file() {
+            // the tags value JSON-escapes the path (doubled separators
+            // on Windows) — pre-filter across every LIKE form
+            let n = crate::sqlite::open_ro(&db)
+                .ok()
+                .map(|con| {
+                    spec.like_patterns()
+                        .iter()
+                        .map(|pat| {
+                            super::sqlite_like_count(
+                                &con,
+                                "SELECT rowid FROM \"conversation_metadata\" \
+                                 WHERE \"tags\" LIKE ?",
+                                pat,
+                            )
+                        })
+                        .sum()
+                })
+                .unwrap_or(0);
+            if n > 0 {
+                backup.record_db(&db)?;
+                if !backup.dry_run {
+                    let con = crate::sqlite::open_rw(&db)?;
+                    super::rewrite_pair(
+                        &con,
+                        &spec.like_patterns(),
+                        spec,
+                        "SELECT rowid,\"tags\" FROM \"conversation_metadata\" \
+                         WHERE \"tags\" LIKE ?",
+                        "UPDATE \"conversation_metadata\" SET \"tags\"=? \
+                         WHERE rowid=?",
+                    )?;
+                }
+                actions.push(mk(self.name(), "sqlite", &db, "conversation_metadata.tags"));
+            }
+        }
         let roots = [self.root(ctx)];
         actions.extend(self.migrate_text_tree(spec, backup, &roots, deep)?);
         Ok(actions)

@@ -176,7 +176,7 @@ Um `move` entre hosts adiciona a árvore do projeto (com `.git`) à troca: `--st
 | Factory Droid | `~/.factory/sessions/<encoded>/` | realpath, apenas barras |
 | Continue | `~/.continue/sessions/*.json`, index.sqlite | URI file:// + tag_catalog.dir |
 | pi / gsd | `~/.pi/agent/sessions/--<enc>--/` | bucket `--encoded--` + `cwd` |
-| Zed | `~/.local/share/zed/threads/threads.db` | threads.folder_paths |
+| Zed | `~/.local/share/zed/threads/threads.db`, `db/0-*/db.sqlite` | folder_paths + workspaces/toolchains/trusted paths |
 | Aider | `~/.aider.conf.yml` | caminhos absolutos na configuração |
 | cc-connect | `~/.cc-connect/dir_history.json`, `sessions/<name>_<sha256[:8]>.json` | MRU de diretórios + hash no nome do arquivo |
 | Kimi Code | `~/.kimi-code/` workspaces.json, session_index.jsonl, sessions/, file-history/, workspace-trust/ | buckets `wd_<basename>_<sha256[:12]>` (dirs+arquivos) + workDir |
