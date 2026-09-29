@@ -169,7 +169,7 @@ Un `move` inter-hôtes ajoute l'arborescence du projet (avec `.git`) à l'échan
 | iFlow CLI | `~/.iflow/projects/<fromPath>/`, tmp/history/cache/snapshots `<sha256>` | encodage propre + sha256 |
 | OpenCode | `~/.local/share/opencode/opencode.db` | colonnes directory de session/project/workspace |
 | Oh My Pi (omp) | `~/.omp/agent/sessions/<omp-bucket>/`, history.db | bucket en tirets relatif au home + `cwd` |
-| ZCode | `~/.zcode/cli/db/db.sqlite`, memories/ | session.directory/path, workflow_run.cwd |
+| ZCode | `~/.zcode/cli/db/db.sqlite`, memories/, `~/.zcode/v2` | session.directory/path + project_id token, workflow_run/dwf_run cwd, v2 checkpoints/tasks-index |
 | Cursor (IDE+CLI) | `~/.config/Cursor/.../state.vscdb`, `~/.cursor/projects/<dash>/` | fsPath/URI file:// + composerData |
 | Windsurf | `~/.codeium/windsurf/` + state.vscdb de l'IDE | md5(path) + URI file:// |
 | Antigravity | `~/.config/Antigravity/.../state.vscdb` + `~/.gemini/antigravity` | comme les forks VS Code |

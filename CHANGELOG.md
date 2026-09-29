@@ -28,6 +28,7 @@ and the release page renders every newline as a forced break.
 
 ### Fixed
 
+- ZCode adapter: the project identity token (`session.project_id`, `proj_` + slugified path) stayed stale after a move while listSessions filters on the runtime-rederived value, so every session of the moved project vanished from the list; the token now follows across session/permission/input_history/local_setting, dwf_run.cwd, workflow script paths and permission ruleset values are rewritten, the desktop side (~/.zcode/v2) is covered (bot-state workspacePath/workspaceId, setting.json recentProjects, checkpoints|sessions sha256[:12] dir renames, tasks-index.sqlite workspace columns), and the memory-key slug reproduces the upstream sanitization (lowercased basename, collapsed runs, 48 chars; Windows lowercases the hash source) — verified against the open-source zai-org/ZCode v3.14 tree plus a live-state dry-run.
 - Parallel `receive`/`import` runs could collide on the extraction staging directory when the clock handed them the same microsecond (reproducible on quantized VM clocks such as CI runners), merging two archives into one staging tree and refusing each other's members; the staging name now carries the pid and an in-process sequence and is created exclusively, with a concurrency test pinning uniqueness.
 
 ## [1.2.0] - 2026-09-20

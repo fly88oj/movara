@@ -63,8 +63,77 @@ pub fn basename(path: &str) -> String {
     }
 }
 
+/// ZCode slug core (upstream slugify): lowercase, every run of chars
+/// outside [a-z0-9._-] collapses to one '-', edges trimmed.
+fn zcode_slug(value: &str) -> String {
+    let mut out = String::new();
+    let mut pending_dash = false;
+    for ch in value.to_lowercase().chars() {
+        if ch.is_ascii_lowercase() || ch.is_ascii_digit() || matches!(ch, '.' | '_' | '-') {
+            if pending_dash && !out.is_empty() {
+                out.push('-');
+            }
+            pending_dash = false;
+            out.push(ch);
+        } else {
+            pending_dash = true;
+        }
+    }
+    out
+}
+
+/// ZCode hashes the resolved absolute workspace path, lowercased first
+/// on Windows only (project-root.ts keySource).
+fn zcode_key_source(path: &str) -> String {
+    if cfg!(windows) {
+        path.to_lowercase()
+    } else {
+        path.to_string()
+    }
+}
+
+/// ZCode memory key: <slug48>-<sha256(cwd)[:16]> where the slug is the
+/// sanitized basename (project-root.ts sanitizeProjectSlug).
 pub fn zcode_memory_key(path: &str) -> String {
-    format!("{}-{}", basename(path), sha256_16(path))
+    let slug = zcode_slug(&basename(path));
+    let slug = if slug.len() > 48 {
+        slug[..48].to_string()
+    } else {
+        slug
+    };
+    let slug = if slug.is_empty() {
+        "project".to_string()
+    } else {
+        slug
+    };
+    format!("{}-{}", slug, sha256_16(&zcode_key_source(path)))
+}
+
+/// ZCode project identity: `proj_` + slugified full path truncated to
+/// 80 ("default" when empty). The runtime rederives it from the
+/// workspace root and listSessions filters by it, so a stale id
+/// orphans every session of the moved project.
+pub fn zcode_project_id(path: &str) -> String {
+    let slug = zcode_slug(path);
+    let slug = if slug.len() > 80 {
+        slug[..80].to_string()
+    } else {
+        slug
+    };
+    format!(
+        "proj_{}",
+        if slug.is_empty() {
+            "default".to_string()
+        } else {
+            slug
+        }
+    )
+}
+
+/// ZCode desktop-side workspace hash: sha256(keySource)[:12] naming the
+/// v2/checkpoints and v2/sessions directories (paths.ts getWorkspaceHash).
+pub fn zcode_workspace_hash12(path: &str) -> String {
+    sha256_hex(&zcode_key_source(path))[..12].to_string()
 }
 
 /// Kimi Code workspace bucket: wd_<basename(root)>_<sha256(root)[:12]>.
@@ -182,6 +251,7 @@ pub fn derived_tokens(old: &str, new: &str) -> Vec<(String, String)> {
         (sha256_16(old), sha256_16(new)),
         (md5_hex(old), md5_hex(new)),
         (zcode_memory_key(old), zcode_memory_key(new)),
+        (zcode_project_id(old), zcode_project_id(new)),
         (kimi_bucket(old), kimi_bucket(new)),
     ];
     let mut seen = std::collections::HashSet::new();

@@ -192,7 +192,7 @@ A cross-host `move` adds the project tree (and `.git`) to the exchange: `--state
 | iFlow CLI | `~/.iflow/projects/<fromPath>/`, tmp/history/cache/snapshots `<sha256>` | own encoding + sha256 |
 | OpenCode | `~/.local/share/opencode/opencode.db` | session/project/workspace directory columns |
 | Oh My Pi (omp) | `~/.omp/agent/sessions/<omp-bucket>/`, history.db | home-relative dash bucket + `cwd` |
-| ZCode | `~/.zcode/cli/db/db.sqlite`, memories/ | session.directory/path, workflow_run.cwd |
+| ZCode | `~/.zcode/cli/db/db.sqlite`, memories/, `~/.zcode/v2` | session.directory/path + project_id token, workflow_run/dwf_run cwd, v2 checkpoints/tasks-index |
 | Cursor (IDE+CLI) | `~/.config/Cursor/.../state.vscdb`, `~/.cursor/projects/<dash>/` | fsPath/file:// URIs + composerData |
 | Windsurf | `~/.codeium/windsurf/` + IDE state.vscdb | md5(path) + file:// URIs |
 | Antigravity | `~/.config/Antigravity/.../state.vscdb` + `~/.gemini/antigravity` | same as VS Code forks |

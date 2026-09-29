@@ -173,7 +173,7 @@ movara undo --id 20260903-131427-644777
 | iFlow CLI | `~/.iflow/projects/`、tmp/history/cache/snapshots `<sha256>` | 自有编码 + sha256 |
 | OpenCode | `~/.local/share/opencode/opencode.db` | session/project/workspace directory 列 |
 | Oh My Pi (omp) | `~/.omp/agent/sessions/<omp桶>/`、history.db | home 相对连字符桶 + `cwd` |
-| ZCode | `~/.zcode/cli/db/db.sqlite`、memories/ | session.directory/path |
+| ZCode | `~/.zcode/cli/db/db.sqlite`、memories/、`~/.zcode/v2` | session.directory/path 与 project_id 令牌、workflow_run.cwd、v2 checkpoints/tasks-index |
 | Cursor（IDE+CLI） | `~/.config/Cursor/.../state.vscdb` | fsPath/file:// URI |
 | Windsurf | `~/.codeium/windsurf/` + IDE state.vscdb | md5(path) + file:// URI |
 | Antigravity | `~/.config/Antigravity/.../state.vscdb` | 同 VS Code fork |

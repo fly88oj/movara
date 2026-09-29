@@ -87,7 +87,7 @@ local data. A Chinese version is available at `docs/research.zh-CN.md`.
 |---|---|---|---|
 | Gemini CLI | `sha256(cwd)` hex | `projectHash` field in chats json | ✅ byte-compared |
 | Qwen / iFlow | `sha256(cwd)` | `tmp/` (iFlow: history/cache/snapshots too) | ✅ |
-| zcode | `sha256(cwd)[:16]` | `~/.zcode/cli/memories/projects/<basename>-<hash16>` | ✅ |
+| zcode | `sha256(cwd)[:16]` (memories), `[:12]` (v2 dirs); `proj_`+slug(path)[:80] project id | `~/.zcode/cli/memories/projects/<slug48>-<hash16>`, `~/.zcode/v2/{checkpoints,sessions}/<hash12>`, db project-key columns | ✅ source-verified (zai-org/ZCode v3.14) |
 | Windsurf | `md5(path without file:// scheme)` | `~/.codeium/windsurf/context_state|database/<32hex>`, `cachedWorkspaceInfosResponse:<hash>` keys in state.vscdb | ✅ (multi-root workspaces hash the workspace.json path — unsupported) |
 | cc-connect | first 4 bytes of `sha256(workDir)` = 8 hex | `sessions/<project>_<hash>.json` filenames | source-verified |
 | OpenCode | `sha1("git-remote:"+normalizedURL)` / root commit / `"global"` | `project.id` (**path-independent**; id survives a pure rename) | ✅ local ids match neither sha1 nor sha256 of the path |
@@ -105,7 +105,17 @@ local data. A Chinese version is available at `docs/research.zh-CN.md`.
   `project_directory` rows whose dir is missing (so UPDATE is required,
   not self-healing).
 - **zcode**: db.sqlite `session.directory/path`, `workflow_run.cwd`;
-  agents/exec/artifacts metadata.json carries the workspace.
+  agents/exec/artifacts metadata.json carries the workspace. Verified
+  against the open-source tree (zai-org/ZCode v3.14) and live-state
+  probes: `session.project_id` (`proj_` + slugified path [:80]) is
+  rederived by the runtime and listSessions filters on it, so it, the
+  permission/input_history/local_setting project keys, dwf_run.cwd,
+  script paths and ruleset values follow the move; the desktop side
+  (`~/.zcode/v2`) rides too — bot-state workspacePath/workspaceId,
+  setting.json recentProjects, `checkpoints|sessions/<sha256[:12]>/`
+  renames, tasks-index.sqlite workspace columns; the memory-key slug
+  reproduces the upstream sanitization (lowercased basename, runs
+  collapsed, 48 chars; Windows lowercases the hash source).
 - **omp**: history.db `history.cwd`.
 - **Zed**: `~/.local/share/zed/threads/threads.db`
   `threads.folder_paths` (newline-joined sorted absolute paths);
@@ -179,8 +189,10 @@ local data. A Chinese version is available at `docs/research.zh-CN.md`.
   source).
 - iflow `-p` persists no session (0.5.x, verified) — no functional resume
   verification possible.
-- zcode/zed desktop GUIs were not launched end-to-end (database-level
-  verification against their real schemas instead).
+- zed's desktop GUI was not launched end-to-end (database-level
+  verification against the real schema instead); zcode is now
+  source-verified against zai-org/ZCode v3.14 with a live-state
+  dry-run (its desktop app still was not exercised end-to-end).
 
 ## 2026-09-22 market census additions (11 new agents)
 

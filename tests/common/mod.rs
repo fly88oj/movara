@@ -791,20 +791,72 @@ impl Fixture {
         fs::create_dir_all(db.parent().unwrap()).unwrap();
         let con = rusqlite::Connection::open(&db).unwrap();
         con.execute_batch(
-            "CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, \
-             path TEXT, title TEXT);\
+            "CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT, \
+             workspace_id TEXT, directory TEXT, path TEXT, title TEXT);\
              CREATE TABLE workflow_run (id TEXT PRIMARY KEY, cwd TEXT, \
-             status TEXT);",
+             script_path TEXT, status TEXT);\
+             CREATE TABLE workflow_definition (id TEXT PRIMARY KEY, name TEXT, \
+             script_path TEXT);\
+             CREATE TABLE permission (project_id TEXT PRIMARY KEY, data TEXT);\
+             CREATE TABLE input_history (id TEXT PRIMARY KEY, project_id TEXT, \
+             text TEXT, attachments TEXT);\
+             CREATE TABLE local_setting (scope TEXT, scope_id TEXT, \
+             namespace TEXT, key TEXT, value TEXT);\
+             CREATE TABLE dwf_run (id TEXT PRIMARY KEY, cwd TEXT);",
+        )
+        .unwrap();
+        let pid_old = movara::encodings::zcode_project_id(&self.old);
+        con.execute(
+            "INSERT INTO session VALUES (?,?,?,?,?,?)",
+            rusqlite::params![
+                "sess_1",
+                pid_old,
+                Option::<String>::None,
+                self.old,
+                self.old,
+                "t"
+            ],
         )
         .unwrap();
         con.execute(
-            "INSERT INTO session VALUES (?,?,?,?)",
-            rusqlite::params!["sess_1", self.old, self.old, "t"],
+            "INSERT INTO workflow_run VALUES (?,?,?,?)",
+            rusqlite::params!["run_1", self.old, format!("{}/wf.ts", self.old), "done"],
         )
         .unwrap();
         con.execute(
-            "INSERT INTO workflow_run VALUES (?,?,?)",
-            rusqlite::params!["run_1", self.old, "done"],
+            "INSERT INTO workflow_definition VALUES (?,?,?)",
+            rusqlite::params!["def_1", "wf", format!("{}/wf.ts", self.old)],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO permission VALUES (?,?)",
+            rusqlite::params![pid_old, "{}"],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO input_history VALUES (?,?,?,?)",
+            rusqlite::params!["ih_1", pid_old, "hello", "[]"],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO local_setting VALUES (?,?,?,?,?)",
+            rusqlite::params![
+                "project",
+                pid_old,
+                "permission",
+                "ruleset",
+                serde_json::json!({
+                    "version": 1,
+                    "allow": [{"toolName": "Write",
+                               "ruleContent": format!("{}/src/**", self.old)}]
+                })
+                .to_string()
+            ],
+        )
+        .unwrap();
+        con.execute(
+            "INSERT INTO dwf_run VALUES (?,?)",
+            rusqlite::params!["dwf_1", self.old],
         )
         .unwrap();
         let key_old = movara::encodings::zcode_memory_key(&self.old);
@@ -816,6 +868,38 @@ impl Fixture {
             ".zcode/cli/agents/sess_1/agent_1/metadata.json",
             serde_json::json!({"workspace": self.old}),
         );
+        // desktop side (~/.zcode/v2)
+        self.wj(
+            ".zcode/v2/bot-state.v3.json",
+            serde_json::json!({
+                "bots": {"bot-1": {"workspacePath": self.old,
+                                   "workspaceId": self.old}}
+            }),
+        );
+        self.wj(
+            ".zcode/v2/setting.json",
+            serde_json::json!({
+                "recentProjects": [self.old],
+                "lastWorkspaceSession": [{"workspacePath": self.old}]
+            }),
+        );
+        let h12_old = movara::encodings::zcode_workspace_hash12(&self.old);
+        self.wj(
+            &format!(".zcode/v2/checkpoints/{}/state.json", h12_old),
+            serde_json::json!({"workspacePath": self.old}),
+        );
+        let tdb = self.ctx.h(".zcode/v2/tasks-index.sqlite");
+        let tcon = rusqlite::Connection::open(&tdb).unwrap();
+        tcon.execute_batch(
+            "CREATE TABLE tasks (task_id TEXT PRIMARY KEY, workspace_key TEXT, \
+             workspace_path TEXT);",
+        )
+        .unwrap();
+        tcon.execute(
+            "INSERT INTO tasks VALUES (?,?,?)",
+            rusqlite::params!["task_1", self.old, self.old],
+        )
+        .unwrap();
     }
 
     fn build_vscode(&self, app: &str) {

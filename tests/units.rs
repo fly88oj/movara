@@ -64,10 +64,29 @@ fn encodings_match_reference_values() {
         "-home-u-.hidden-x"
     );
     assert_eq!(encodings::iflow_bucket("/home/u//double"), "-home-u-double");
-    // zcode memory key
+    // zcode memory key: slug is the sanitized basename (lowercased,
+    // runs collapsed, edges trimmed) — upstream sanitizeProjectSlug
     assert_eq!(
         encodings::zcode_memory_key("/home/u/x"),
         format!("x-{}", encodings::sha256_16("/home/u/x"))
+    );
+    assert_eq!(encodings::zcode_memory_key("/home/u/My Proj"), {
+        // Windows lowercases the hash source (project-root.ts)
+        let src = if cfg!(windows) {
+            "/home/u/my proj"
+        } else {
+            "/home/u/My Proj"
+        };
+        format!("my-proj-{}", encodings::sha256_16(src))
+    });
+    // zcode project identity: proj_ + slugified full path ([:80],
+    // "default" fallback) — upstream projectIdFromDirectory
+    assert_eq!(encodings::zcode_project_id("/home/u/x"), "proj_home-u-x");
+    assert_eq!(encodings::zcode_project_id("/"), "proj_default");
+    // desktop-side workspace hash: sha256(cwd)[:12]
+    assert_eq!(
+        encodings::zcode_workspace_hash12("/home/u/x"),
+        encodings::sha256_16("/home/u/x")[..12].to_string()
     );
 }
 
@@ -251,12 +270,88 @@ fn zcode_db_and_memory_key() {
         .query_row("SELECT cwd FROM workflow_run", [], |r| r.get(0))
         .unwrap();
     assert_eq!(cwd, fx.new);
+    // project identity follows the move (listSessions filters by the
+    // rederived id — a stale one orphans every session)
+    let pid: String = con
+        .query_row("SELECT project_id FROM session", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(pid, encodings::zcode_project_id(&fx.new));
+    let perm: String = con
+        .query_row("SELECT project_id FROM permission", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(perm, pid);
+    let ih: String = con
+        .query_row("SELECT project_id FROM input_history", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(ih, pid);
+    let scope: String = con
+        .query_row(
+            "SELECT scope_id FROM local_setting WHERE scope='project'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    // deep temp paths slugify past the 80-char cut, where old and new
+    // ids collide (upstream truncates the same way — nothing to swap)
+    assert_eq!(scope, pid);
+    let ruleset: String = con
+        .query_row(
+            "SELECT value FROM local_setting WHERE key='ruleset'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    // Windows stores the path JSON-escaped — compare form-normalized
+    let ruleset_n = norm_forms(&ruleset);
+    assert!(!ruleset_n.contains(&norm_forms(&fx.old)));
+    assert!(ruleset_n.contains(&norm_forms(&fx.new)));
+    let dwf: String = con
+        .query_row("SELECT cwd FROM dwf_run", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(dwf, fx.new);
+    let sp: String = con
+        .query_row("SELECT script_path FROM workflow_run", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(sp, format!("{}/wf.ts", fx.new));
+    let dsp: String = con
+        .query_row("SELECT script_path FROM workflow_definition", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(dsp, format!("{}/wf.ts", fx.new));
     let mem = fx.ctx.h(".zcode/cli/memories/projects");
     assert!(mem.join(encodings::zcode_memory_key(&fx.new)).is_dir());
     let meta = json_val(&read(
         &fx.ctx.h(".zcode/cli/agents/sess_1/agent_1/metadata.json"),
     ));
     assert_eq!(meta["workspace"], json!(fx.new));
+    // desktop side: v2 bot-state, setting.json recents, checkpoint dir,
+    // tasks-index
+    let bot = json_val(&read(&fx.ctx.h(".zcode/v2/bot-state.v3.json")));
+    assert_eq!(bot["bots"]["bot-1"]["workspacePath"], json!(fx.new));
+    assert_eq!(bot["bots"]["bot-1"]["workspaceId"], json!(fx.new));
+    let setting = json_val(&read(&fx.ctx.h(".zcode/v2/setting.json")));
+    assert_eq!(setting["recentProjects"][0], json!(fx.new));
+    assert_eq!(
+        setting["lastWorkspaceSession"][0]["workspacePath"],
+        json!(fx.new)
+    );
+    let h12_new = encodings::zcode_workspace_hash12(&fx.new);
+    let cps = fx.ctx.h(".zcode/v2/checkpoints");
+    assert!(cps.join(&h12_new).is_dir());
+    assert!(!cps
+        .join(encodings::zcode_workspace_hash12(&fx.old))
+        .is_dir());
+    let ck = json_val(&read(&cps.join(&h12_new).join("state.json")));
+    assert_eq!(ck["workspacePath"], json!(fx.new));
+    let tcon = rusqlite::Connection::open(fx.ctx.h(".zcode/v2/tasks-index.sqlite")).unwrap();
+    let (wk, wp): (String, String) = tcon
+        .query_row("SELECT workspace_key, workspace_path FROM tasks", [], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
+        .unwrap();
+    assert_eq!(wk, fx.new);
+    assert_eq!(wp, fx.new);
 }
 
 #[test]

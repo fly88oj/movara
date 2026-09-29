@@ -194,7 +194,7 @@ Un `move` entre hosts añade el árbol del proyecto (con `.git`) al intercambio:
 | iFlow CLI | `~/.iflow/projects/<fromPath>/`, tmp/history/cache/snapshots `<sha256>` | codificación propia + sha256 |
 | OpenCode | `~/.local/share/opencode/opencode.db` | columnas directory de session/project/workspace |
 | Oh My Pi (omp) | `~/.omp/agent/sessions/<omp-bucket>/`, history.db | bucket de guiones relativo al home + `cwd` |
-| ZCode | `~/.zcode/cli/db/db.sqlite`, memories/ | session.directory/path, workflow_run.cwd |
+| ZCode | `~/.zcode/cli/db/db.sqlite`, memories/, `~/.zcode/v2` | session.directory/path + project_id token, workflow_run/dwf_run cwd, v2 checkpoints/tasks-index |
 | Cursor (IDE+CLI) | `~/.config/Cursor/.../state.vscdb`, `~/.cursor/projects/<dash>/` | fsPath/URI file:// + composerData |
 | Windsurf | `~/.codeium/windsurf/` + state.vscdb del IDE | md5(path) + URI file:// |
 | Antigravity | `~/.config/Antigravity/.../state.vscdb` + `~/.gemini/antigravity` | igual que los forks de VS Code |

@@ -167,7 +167,7 @@ movara undo --id 20260903-131427-644777
 | iFlow CLI | `~/.iflow/projects/<fromPath>/`, tmp/history/cache/snapshots `<sha256>` | 자체 인코딩 + sha256 |
 | OpenCode | `~/.local/share/opencode/opencode.db` | session/project/workspace의 directory 컬럼 |
 | Oh My Pi (omp) | `~/.omp/agent/sessions/<omp-bucket>/`, history.db | home 상대 대시 버킷 + `cwd` |
-| ZCode | `~/.zcode/cli/db/db.sqlite`, memories/ | session.directory/path, workflow_run.cwd |
+| ZCode | `~/.zcode/cli/db/db.sqlite`, memories/, `~/.zcode/v2` | session.directory/path + project_id token, workflow_run/dwf_run cwd, v2 checkpoints/tasks-index |
 | Cursor (IDE+CLI) | `~/.config/Cursor/.../state.vscdb`, `~/.cursor/projects/<dash>/` | fsPath/file:// URI + composerData |
 | Windsurf | `~/.codeium/windsurf/` + IDE state.vscdb | md5(path) + file:// URI |
 | Antigravity | `~/.config/Antigravity/.../state.vscdb` + `~/.gemini/antigravity` | VS Code fork와 동일 |
