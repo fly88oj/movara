@@ -29,6 +29,9 @@ AN=acp-$(python3 -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode
 ACONV=$T/home/.local/share/gptme/logs/$A
 mkdir -p $ACONV
 printf '{"role": "user", "content": "acp"}\n' > $ACONV/conversation.jsonl
+# agent's own view BEFORE: the installed CLI lists the seeded chat
+HOME=$T/home gptme chats list | grep -q verif
+echo "gptme: agent's own chats list sees the seeded conversation"
 export MOVARA_HOME=$T/home
 /src/target/debug/movara migrate --from $T/proj/abc --to $T/proj/cba --agents gptme --yes
 grep -q "$T/proj/cba" $CONV/config.toml
@@ -36,6 +39,9 @@ grep -q "$T/proj/cba" $CONV/config.toml
 echo "gptme: workspace + symlink rekeyed OK"
 [ -d $T/home/.local/share/gptme/logs/$AN ] && [ ! -d $ACONV ]
 echo "gptme: acp session dir rekeyed OK"
+# agent's own view AFTER: the conversation still lists through the CLI
+HOME=$T/home gptme chats list | grep -q verif
+echo "gptme: agent's own chats list still sees the migrated conversation"
 /src/target/debug/movara undo --id $(ls $T/home/.movara/backups | tail -1)
 grep -q "$T/proj/abc" $CONV/config.toml
 [ "$(readlink $CONV/workspace)" = "$T/proj/abc" ]

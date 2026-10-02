@@ -44,6 +44,30 @@ is the upstream revision the logic was compared against.
 | warp | warp.db generic sweep | closed | synthetic-verified only (no live sample) |
 | openinterpreter | rust rebase (0.0.x) | openinterpreter/openinterpreter HEAD 2026-09-27 | threads + project_roots additive passes |
 
+## 0b. Dual-track verification status (source review + runtime test)
+
+Every open-source adapter carries BOTH verification tracks. Track 1
+(source) compared the adapter against the upstream code — see §0.
+Track 2 (runtime) exercised a real migration end to end inside an
+isolated container. The strongest runtime form is the agent's own
+view: the REAL installed CLI lists/resolves the sessions itself after
+the move. Where the CLI's only local surface is behind a login wall,
+the container installs the real binary and drives migrate/undo
+against state seeded with the real (source-derived) schema — the
+agent's own read paths are then auth-blocked by design, not by us.
+
+| agent | source track | runtime track |
+|---|---|---|
+| kimi | closed; official data-locations docs | **agent's own view** (real CDN CLI, `kimi session list` gate) |
+| goose | block/goose HEAD | **agent's own view** (`goose session list` before+after, real v16 schema seed) |
+| gptme | gptme/gptme v0.34.0 | **agent's own view** (`gptme chats list` before+after, ACP dirs) |
+| claude / codex / qwen / opencode / crush / continue / pi / omp / aider / cc-connect / openinterpreter | upstream HEAD (see §0) | real CLI installed + real-schema seed + migrate/assert/undo roundtrip (login wall: no own-view command) |
+| copilot | v1.0.89 release binary | real CLI 1.0.89 installed + chronicle-index roundtrip (`sessions` subcommand is import-only; listing lives inside the authed session UI) |
+| gemini | gemini-cli v0.44.0 | real CLI installed + seed roundtrip (chat requires Google auth) |
+| zcode | zai-org/ZCode v3.14.3 source + live-state dry-run on a real machine | container roundtrip over the full desktop+CLI schema |
+| cline / roo / kilo (extensions) | cline/Roo/kilo sources incl. historical tags | real-extension storage formats (marketplace/.vsix artifacts) + vscdb roundtrip; ZooCode fork is v1.4 scope |
+| zed / cursor / windsurf / antigravity / warp / droid / qoder / trae / iflow | closed (live-machine layouts / release-binary grep) | real-schema container roundtrip; zed/warp verified against release-derived schemas |
+
 ## 1. Agents keyed by encoded directory names
 
 ### Claude Code
